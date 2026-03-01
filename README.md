@@ -472,24 +472,36 @@ skillbridge/
 
 ## 🔑 Sample Credentials
 
-For testing and demonstration:
+For testing and demonstration, run `npx prisma db seed` to populate the database with sample data.
+
+**Password for all accounts: `password123`**
 
 ### Candidates
 
-| Name             | Email                | Password  |
-| ---------------- | -------------------- | --------- |
-| Kaustubh Thallam | kaustubh@example.com | Test@1234 |
-| Priya Sharma     | priya@example.com    | Test@1234 |
-| Arjun Patel      | arjun@example.com    | Test@1234 |
+| Name           | Email             | Skills                                                                          |
+| -------------- | ----------------- | ------------------------------------------------------------------------------- |
+| Alice Johnson  | alice@example.com | Python (4), Flask (3), SQL (3), React (2), Git (4)                              |
+| Bob Smith      | bob@example.com   | React (5), JavaScript (5), TypeScript (4), Node.js (4), CSS (4), PostgreSQL (3) |
+| Carol Williams | carol@example.com | Python (5), TensorFlow (4), Scikit-learn (4), Docker (3), FastAPI (4)           |
 
 ### Recruiters
 
-| Company            | Email                 | Password       |
-| ------------------ | --------------------- | -------------- |
-| TechCorp Solutions | hr@techcorp.com       | Recruiter@1234 |
-| InnoStudio         | hiring@innostudio.com | Recruiter@1234 |
+| Company   | Email                    |
+| --------- | ------------------------ |
+| TechCorp  | recruiter1@techcorp.com  |
+| StartupAI | recruiter2@startupai.com |
 
-> **Note**: Create these accounts manually through the sign-up flow or use the database seeder.
+### Sample Postings (5 total)
+
+| Title                              | Type       | Company   | Key Skills                             |
+| ---------------------------------- | ---------- | --------- | -------------------------------------- |
+| Backend Developer Intern           | Internship | TechCorp  | Python (5), Node.js (4), SQL (3)       |
+| Frontend Developer Intern          | Internship | TechCorp  | React (5), JavaScript (4), CSS (2)     |
+| ML Pipeline for Sentiment Analysis | Project    | StartupAI | Python (5), ML (5), REST APIs (3)      |
+| Full Stack Developer Intern        | Internship | StartupAI | React (4), Node.js (4), PostgreSQL (3) |
+| DevOps Automation Project          | Project    | TechCorp  | Docker (5), Git (3), Python (2)        |
+
+> **Note**: You can also create new accounts through the sign-up flow at `/signup`.
 
 ---
 
