@@ -14,7 +14,7 @@ from skill_taxonomy import SKILL_TAXONOMY, EXTRA_SKILLS, expand_skills
 
 load_dotenv()
 
-app = FastAPI(title="SkillBridge NLP Service", version="1.0.0")
+app = FastAPI(title="SkillSync NLP Service", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,

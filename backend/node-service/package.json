@@ -1,7 +1,7 @@
 {
   "name": "skillbridge-node-service",
   "version": "1.0.0",
-  "description": "SkillBridge Backend API - Node.js Service",
+  "description": "SkillSync Backend API - Node.js Service",
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",

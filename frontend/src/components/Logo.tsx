@@ -6,7 +6,7 @@ const Logo = ({ collapsed = false }: { collapsed?: boolean }) => (
       <Sparkles className="h-5 w-5 text-retro-gold" />
     </div>
     {!collapsed && (
-      <span className="text-lg font-bold font-heading">SkillBridge</span>
+      <span className="text-lg font-bold font-heading">SkillSync</span>
     )}
   </div>
 );

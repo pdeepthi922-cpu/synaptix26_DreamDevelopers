@@ -73,9 +73,7 @@ const Signup = () => {
           <h1 className="text-2xl font-bold font-heading text-retro-charcoal">
             Create an Account
           </h1>
-          <p className="text-retro-brown text-sm mt-1">
-            Join SkillBridge today
-          </p>
+          <p className="text-retro-brown text-sm mt-1">Join SkillSync today</p>
         </div>
 
         {step === 1 && (

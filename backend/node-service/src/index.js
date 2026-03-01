@@ -91,7 +91,7 @@ app.use((err, req, res, next) => {
 // ─── Start Server ───
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`[NODE] SkillBridge API running on port ${PORT}`);
+  console.log(`[NODE] SkillSync API running on port ${PORT}`);
   console.log(`[NODE] Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(
     `[NODE] Python service: ${process.env.PYTHON_SERVICE_URL || "http://localhost:8000"}`,
