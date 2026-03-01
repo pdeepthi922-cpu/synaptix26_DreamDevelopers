@@ -2,7 +2,12 @@ import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],
-  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
+  content: [
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
+  ],
   prefix: "",
   theme: {
     container: {
@@ -74,7 +79,7 @@ export default {
           charcoal: "#2F2A24",
           beige: "#F1ECE3",
           brown: "#8B7355",
-          olive: "#6B7A40",
+          olive: "#B07D3A",
           gold: "#C8A951",
           orange: "#D97706",
           cream: "#FAF7F0",
@@ -90,10 +95,14 @@ export default {
       },
       boxShadow: {
         soft: "0 2px 8px rgba(47, 42, 36, 0.06), 0 1px 3px rgba(47, 42, 36, 0.04)",
-        "soft-md": "0 4px 16px rgba(47, 42, 36, 0.08), 0 2px 6px rgba(47, 42, 36, 0.05)",
-        "soft-lg": "0 8px 30px rgba(47, 42, 36, 0.10), 0 4px 10px rgba(47, 42, 36, 0.06)",
-        "soft-xl": "0 12px 40px rgba(47, 42, 36, 0.12), 0 6px 16px rgba(47, 42, 36, 0.07)",
-        "soft-hover": "0 10px 35px rgba(47, 42, 36, 0.12), 0 4px 14px rgba(47, 42, 36, 0.07)",
+        "soft-md":
+          "0 4px 16px rgba(47, 42, 36, 0.08), 0 2px 6px rgba(47, 42, 36, 0.05)",
+        "soft-lg":
+          "0 8px 30px rgba(47, 42, 36, 0.10), 0 4px 10px rgba(47, 42, 36, 0.06)",
+        "soft-xl":
+          "0 12px 40px rgba(47, 42, 36, 0.12), 0 6px 16px rgba(47, 42, 36, 0.07)",
+        "soft-hover":
+          "0 10px 35px rgba(47, 42, 36, 0.12), 0 4px 14px rgba(47, 42, 36, 0.07)",
         retro: "4px 4px 0px #2F2A24",
         "retro-sm": "2px 2px 0px #2F2A24",
       },

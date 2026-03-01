@@ -60,13 +60,11 @@ router.post(
       });
     }
 
-    res
-      .status(201)
-      .json({
-        message: "Application submitted.",
-        application,
-        matchScore: matchScore.score,
-      });
+    res.status(201).json({
+      message: "Application submitted.",
+      application,
+      matchScore: matchScore.score,
+    });
   }),
 );
 
@@ -140,6 +138,63 @@ router.get(
       ...app,
       matchScore: scoreMap[app.postingId] || null,
     }));
+    res.json({ applications: result, total: result.length });
+  }),
+);
+
+// ─── GET /applications/posting/:postingId (for recruiters) ───
+router.get(
+  "/posting/:postingId",
+  authenticate,
+  requireRole("RECRUITER"),
+  catchAsync(async (req, res) => {
+    const { postingId } = req.params;
+
+    // Verify the posting belongs to this recruiter
+    const posting = await prisma.posting.findUnique({
+      where: { id: postingId },
+      include: { recruiter: true },
+    });
+    if (!posting) throw new ApiError(404, "Posting not found.");
+
+    const recruiterProfile = await prisma.recruiterProfile.findUnique({
+      where: { userId: req.user.id },
+    });
+    if (!recruiterProfile || posting.recruiterId !== recruiterProfile.id) {
+      throw new ApiError(
+        403,
+        "You can only view applications for your own postings.",
+      );
+    }
+
+    const applications = await prisma.application.findMany({
+      where: { postingId, withdrawn: false },
+      include: {
+        candidate: {
+          select: { id: true, name: true, user: { select: { email: true } } },
+        },
+      },
+      orderBy: { appliedAt: "desc" },
+    });
+
+    // Get match scores for these candidates
+    const candidateIds = applications.map((a) => a.candidateId);
+    const scores = await prisma.matchScore.findMany({
+      where: { candidateId: { in: candidateIds }, postingId },
+    });
+    const scoreMap = {};
+    scores.forEach((s) => {
+      scoreMap[s.candidateId] = s.score;
+    });
+
+    const result = applications.map((app) => ({
+      candidateId: app.candidate.id,
+      candidateName:
+        app.candidate.name || app.candidate.user?.email || "Unknown",
+      score: scoreMap[app.candidateId] || 0,
+      appliedAt: app.appliedAt,
+    }));
+
     res.json({ applications: result, total: result.length });
   }),
 );

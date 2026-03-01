@@ -1,32 +1,45 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Logo from "@/components/Logo";
-import { ArrowLeft, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 const Login = () => {
+  const { login, isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
-  const { login } = useAuth();
+
+  // Redirect if already logged in
+  if (isAuthenticated && user) {
+    const dashPath =
+      user.userType === "recruiter"
+        ? "/dashboard/recruiter"
+        : "/dashboard/candidate";
+    return <Navigate to={dashPath} replace />;
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
+    setLoading(true);
     try {
-      setLoading(true);
       await login(email, password);
+      const stored = localStorage.getItem("user");
+      const u = stored ? JSON.parse(stored) : null;
+      if (u?.userType === "recruiter") {
+        navigate("/dashboard/recruiter");
+      } else {
+        navigate("/dashboard/candidate");
+      }
       toast.success("Welcome back!");
-      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-      if (storedUser.userType === "candidate") navigate("/dashboard/candidate");
-      else if (storedUser.userType === "recruiter") navigate("/dashboard/recruiter");
-    } catch {
-      setError("Invalid email or password. Please try again.");
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.error || "Invalid credentials. Please try again.";
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -34,39 +47,76 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-retro-beige paper-texture flex items-center justify-center p-4">
-      {/* Fixed back button */}
-      <Link to="/" className="back-btn-fixed">
-        <ArrowLeft className="h-4 w-4" /> Home
-      </Link>
-
       <div className="w-full max-w-md space-y-8 animate-fade-in">
         <div className="text-center">
-          <div className="flex justify-center mb-6"><Logo /></div>
-          <h1 className="text-3xl font-heading font-bold text-retro-charcoal">Welcome Back</h1>
-          <p className="text-sm text-retro-brown mt-2">Sign in to your account</p>
+          <div className="flex justify-center mb-6">
+            <Logo />
+          </div>
+          <h1 className="text-2xl font-bold font-heading text-retro-charcoal">
+            Welcome Back
+          </h1>
+          <p className="text-retro-brown text-sm mt-1">
+            Sign in to your account
+          </p>
         </div>
-
-        <form onSubmit={handleLogin} className="polished-card-static p-8 space-y-5">
+        <form
+          onSubmit={handleLogin}
+          className="polished-card-static p-8 space-y-5"
+        >
           <div className="space-y-2">
-            <label htmlFor="login-email" className="text-xs font-semibold text-retro-charcoal uppercase tracking-wider">Email</label>
-            <Input id="login-email" type="email" placeholder="you@example.com" autoComplete="email" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} required className="input-polished h-11" />
+            <label
+              htmlFor="login-email"
+              className="text-sm font-medium text-retro-charcoal"
+            >
+              Email
+            </label>
+            <Input
+              id="login-email"
+              type="email"
+              required
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
           <div className="space-y-2">
-            <label htmlFor="login-password" className="text-xs font-semibold text-retro-charcoal uppercase tracking-wider">Password</label>
-            <Input id="login-password" type="password" placeholder="••••••••" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required className="input-polished h-11" />
+            <label
+              htmlFor="login-password"
+              className="text-sm font-medium text-retro-charcoal"
+            >
+              Password
+            </label>
+            <Input
+              id="login-password"
+              type="password"
+              required
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
-
-          {error && <p className="text-sm text-retro-orange font-medium">{error}</p>}
-
-          <Button type="submit" className="w-full btn-primary rounded-xl h-11 text-base" disabled={loading}>
-            {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Signing in…</> : "Login"}
+          <Button
+            type="submit"
+            className="w-full btn-gold rounded-xl"
+            size="lg"
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Signing in…
+              </>
+            ) : (
+              "Sign In"
+            )}
           </Button>
-
-          <div className="divider-ornament">or</div>
-
           <p className="text-center text-sm text-retro-brown">
-            Don&rsquo;t have an account?{" "}
-            <Link to="/signup" className="text-retro-charcoal font-bold underline underline-offset-4 hover:text-retro-olive transition-colors">Sign up</Link>
+            Don't have an account?{" "}
+            <Link
+              to="/signup"
+              className="text-retro-olive font-semibold hover:underline"
+            >
+              Sign up
+            </Link>
           </p>
         </form>
       </div>

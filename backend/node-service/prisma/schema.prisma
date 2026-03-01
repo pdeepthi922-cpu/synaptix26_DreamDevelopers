@@ -36,6 +36,8 @@ model CandidateProfile {
   phone       String?
   location    String?
   linkedinUrl String?
+  projects    Json?
+  experience  Json?
   onboarded   Boolean @default(false)
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -126,13 +128,26 @@ model MatchScore {
   @@unique([candidateId, postingId])
 }
 
+enum NotificationType {
+  GENERAL
+  INVITE
+}
+
+enum NotificationAction {
+  NONE
+  ACCEPTED
+  REJECTED
+}
+
 model Notification {
-  id          String   @id @default(uuid())
+  id          String             @id @default(uuid())
   userId      String
   postingId   String?
   message     String
-  read        Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  type        NotificationType   @default(GENERAL)
+  actionTaken NotificationAction @default(NONE)
+  read        Boolean            @default(false)
+  createdAt   DateTime           @default(now())
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   posting Posting? @relation(fields: [postingId], references: [id], onDelete: Cascade)

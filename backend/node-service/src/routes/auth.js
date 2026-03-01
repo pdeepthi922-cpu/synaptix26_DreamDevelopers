@@ -85,4 +85,18 @@ router.post(
   }),
 );
 
+// ─── DELETE /auth/account ───
+router.delete(
+  "/account",
+  require("../middleware/auth").authenticate,
+  catchAsync(async (req, res) => {
+    const userId = req.user.id;
+
+    // Delete user — cascading deletes handle profile, skills, applications, etc.
+    await prisma.user.delete({ where: { id: userId } });
+
+    res.json({ message: "Account deleted successfully." });
+  }),
+);
+
 module.exports = router;

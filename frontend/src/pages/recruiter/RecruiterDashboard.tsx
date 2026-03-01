@@ -1,43 +1,99 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
-import { Users } from "lucide-react";
+import { Users, Loader2 } from "lucide-react";
+import api from "@/api/axios";
 
-const postings = [
-  { id: "1", title: "Frontend Developer Intern", type: "Internship", applicants: 24, route: "/recruiter/internships/1" },
-  { id: "2", title: "Backend Engineer Intern", type: "Internship", applicants: 18, route: "/recruiter/internships/2" },
-  { id: "3", title: "E-Commerce Platform", type: "Project", applicants: 12, route: "/recruiter/projects/1" },
-  { id: "4", title: "ML Pipeline Dashboard", type: "Project", applicants: 8, route: "/recruiter/projects/2" },
-];
+interface PostingItem {
+  id: string;
+  title: string;
+  type: string;
+  _count?: { applications: number };
+}
 
-const RecruiterDashboard = () => (
-  <DashboardLayout role="recruiter">
-    <div className="space-y-8 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold font-heading">Recruiter Dashboard</h1>
-        <p className="text-muted-foreground">Manage your postings and review candidates</p>
-      </div>
+const RecruiterDashboard = () => {
+  const [postings, setPostings] = useState<PostingItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-      <div className="space-y-3">
-        {postings.map((item) => (
-          <Link
-            key={item.id + item.type}
-            to={item.route}
-            className="bg-card border border-border rounded-xl p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow group"
-          >
-            <div className="flex items-center gap-4">
-              <h3 className="font-semibold font-heading group-hover:text-primary transition-colors">{item.title}</h3>
-              <Badge variant={item.type === "Internship" ? "default" : "secondary"}>{item.type}</Badge>
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const { data } = await api.get("/recruiters/me");
+        setPostings(data.profile?.postings || []);
+      } catch {
+        /* fail silently */
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <DashboardLayout role="recruiter">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-retro-olive" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  return (
+    <DashboardLayout role="recruiter">
+      <div className="space-y-8 animate-fade-in">
+        <div>
+          <h1 className="text-2xl font-bold font-heading">
+            Recruiter Dashboard
+          </h1>
+          <p className="text-muted-foreground">
+            Manage your postings and review candidates
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          {postings.map((item) => {
+            const route =
+              item.type === "INTERNSHIP"
+                ? `/recruiter/internships/${item.id}`
+                : `/recruiter/projects/${item.id}`;
+            return (
+              <Link
+                key={item.id}
+                to={route}
+                className="bg-card border border-border rounded-xl p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow group"
+              >
+                <div className="flex items-center gap-4">
+                  <h3 className="font-semibold font-heading group-hover:text-primary transition-colors">
+                    {item.title}
+                  </h3>
+                  <Badge
+                    variant={
+                      item.type === "INTERNSHIP" ? "default" : "secondary"
+                    }
+                  >
+                    {item.type === "INTERNSHIP" ? "Internship" : "Project"}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Users className="h-4 w-4" />
+                  <span>{item._count?.applications || 0} Applied</span>
+                </div>
+              </Link>
+            );
+          })}
+          {postings.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">
+                No postings yet. Create your first internship or project!
+              </p>
             </div>
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <Users className="h-4 w-4" />
-              <span>{item.applicants} Applied</span>
-            </div>
-          </Link>
-        ))}
+          )}
+        </div>
       </div>
-    </div>
-  </DashboardLayout>
-);
+    </DashboardLayout>
+  );
+};
 
 export default RecruiterDashboard;

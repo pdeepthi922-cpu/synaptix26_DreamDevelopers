@@ -2,10 +2,12 @@ import { Sparkles } from "lucide-react";
 
 const Logo = ({ collapsed = false }: { collapsed?: boolean }) => (
   <div className="flex items-center gap-2">
-    <div className="gradient-primary flex h-9 w-9 items-center justify-center rounded-lg">
-      <Sparkles className="h-5 w-5 text-primary-foreground" />
+    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-retro-charcoal">
+      <Sparkles className="h-5 w-5 text-retro-gold" />
     </div>
-    {!collapsed && <span className="text-lg font-bold font-heading">SkillBridge</span>}
+    {!collapsed && (
+      <span className="text-lg font-bold font-heading">SkillBridge</span>
+    )}
   </div>
 );
 

@@ -35,6 +35,28 @@ const onboardingSchema = z.object({
       }),
     )
     .min(1, "At least one skill is required"),
+  projects: z
+    .array(
+      z.object({
+        name: z.string().max(200),
+        description: z.string().max(500).optional().default(""),
+        skillsUsed: z.string().max(300).optional().default(""),
+        role: z.string().max(100).optional().default(""),
+      }),
+    )
+    .optional()
+    .default([]),
+  experience: z
+    .array(
+      z.object({
+        company: z.string().max(200),
+        type: z.string().max(50).optional().default(""),
+        role: z.string().max(200).optional().default(""),
+        duration: z.string().max(100).optional().default(""),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 const profileUpdateSchema = z.object({
@@ -47,6 +69,26 @@ const profileUpdateSchema = z.object({
       z.object({
         skillName: z.string().min(1).max(50),
         proficiency: z.number().int().min(1).max(5),
+      }),
+    )
+    .optional(),
+  projects: z
+    .array(
+      z.object({
+        name: z.string().max(200),
+        description: z.string().max(500).optional().default(""),
+        skillsUsed: z.string().max(300).optional().default(""),
+        role: z.string().max(100).optional().default(""),
+      }),
+    )
+    .optional(),
+  experience: z
+    .array(
+      z.object({
+        company: z.string().max(200),
+        type: z.string().max(50).optional().default(""),
+        role: z.string().max(200).optional().default(""),
+        duration: z.string().max(100).optional().default(""),
       }),
     )
     .optional(),
@@ -73,6 +115,8 @@ router.put(
           phone: data.phone || null,
           location: data.location || null,
           linkedinUrl: data.linkedinUrl || null,
+          projects: data.projects || [],
+          experience: data.experience || [],
           onboarded: true,
         },
       });
@@ -162,6 +206,9 @@ router.put(
       if (data.location !== undefined) updateData.location = data.location;
       if (data.linkedinUrl !== undefined)
         updateData.linkedinUrl = data.linkedinUrl;
+      if (data.projects !== undefined) updateData.projects = data.projects;
+      if (data.experience !== undefined)
+        updateData.experience = data.experience;
 
       const updated = await tx.candidateProfile.update({
         where: { id: profile.id },
@@ -206,7 +253,7 @@ router.get(
   catchAsync(async (req, res) => {
     const profile = await prisma.candidateProfile.findUnique({
       where: { userId: req.user.id },
-      include: { skills: true },
+      include: { skills: true, user: { select: { email: true } } },
     });
     if (!profile) throw new ApiError(404, "Candidate profile not found.");
 

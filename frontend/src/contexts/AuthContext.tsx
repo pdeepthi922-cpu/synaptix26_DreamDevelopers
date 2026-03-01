@@ -1,77 +1,116 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { createContext, useContext, useState, ReactNode } from "react";
+import api from "@/api/axios";
 
 interface User {
-    id: string;
-    fullName: string;
-    email: string;
-    userType: "candidate" | "recruiter";
+  id: string;
+  fullName: string;
+  email: string;
+  userType: "candidate" | "recruiter";
 }
 
 interface AuthContextType {
-    user: User | null;
-    token: string | null;
-    isAuthenticated: boolean;
-    login: (email: string, password: string) => Promise<void>;
-    signup: (fullName: string, email: string, password: string, userType: "candidate" | "recruiter") => Promise<void>;
-    logout: () => void;
+  user: User | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (
+    fullName: string,
+    email: string,
+    password: string,
+    userType: "candidate" | "recruiter",
+  ) => Promise<void>;
+  logout: () => void;
+  updateUserName: (name: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
-    const context = useContext(AuthContext);
-    if (!context) throw new Error("useAuth must be used within an AuthProvider");
-    return context;
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within an AuthProvider");
+  return context;
 };
 
+/** Map backend role (CANDIDATE/RECRUITER) to frontend userType */
+function mapRole(role: string): "candidate" | "recruiter" {
+  return role.toLowerCase() as "candidate" | "recruiter";
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-    const [user, setUser] = useState<User | null>(() => {
-        const stored = localStorage.getItem("user");
-        return stored ? JSON.parse(stored) : null;
+  const [user, setUser] = useState<User | null>(() => {
+    const stored = localStorage.getItem("user");
+    return stored ? JSON.parse(stored) : null;
+  });
+  const [token, setToken] = useState<string | null>(() =>
+    localStorage.getItem("token"),
+  );
+
+  const isAuthenticated = !!token && !!user;
+
+  const login = async (email: string, password: string) => {
+    const { data } = await api.post("/auth/login", { email, password });
+    const mappedUser: User = {
+      id: data.user.id,
+      fullName: data.user.email.split("@")[0], // placeholder until profile loads
+      email: data.user.email,
+      userType: mapRole(data.user.role),
+    };
+    setUser(mappedUser);
+    setToken(data.token);
+    localStorage.setItem("user", JSON.stringify(mappedUser));
+    localStorage.setItem("token", data.token);
+  };
+
+  const signup = async (
+    fullName: string,
+    email: string,
+    password: string,
+    userType: "candidate" | "recruiter",
+  ) => {
+    const role = userType.toUpperCase(); // CANDIDATE or RECRUITER
+    const { data } = await api.post("/auth/signup", { email, password, role });
+    const mappedUser: User = {
+      id: data.user.id,
+      fullName,
+      email: data.user.email,
+      userType: mapRole(data.user.role),
+    };
+    setUser(mappedUser);
+    setToken(data.token);
+    localStorage.setItem("user", JSON.stringify(mappedUser));
+    localStorage.setItem("token", data.token);
+  };
+
+  const logout = () => {
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+  };
+
+  /** Update the user's display name (called after onboarding or profile fetch) */
+  const updateUserName = (name: string) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, fullName: name };
+      localStorage.setItem("user", JSON.stringify(updated));
+      return updated;
     });
-    const [token, setToken] = useState<string | null>(() => localStorage.getItem("token"));
+  };
 
-    const isAuthenticated = !!token && !!user;
-
-    const login = async (email: string, password: string) => {
-        // TODO: Replace with actual API call
-        // const response = await api.post('/auth/login', { email, password });
-        // For now, mock login:
-        const mockUser: User = {
-            id: "1",
-            fullName: "John Doe",
-            email,
-            userType: email.includes("recruiter") ? "recruiter" : "candidate",
-        };
-        const mockToken = "mock-jwt-token-" + Date.now();
-        setUser(mockUser);
-        setToken(mockToken);
-        localStorage.setItem("user", JSON.stringify(mockUser));
-        localStorage.setItem("token", mockToken);
-    };
-
-    const signup = async (fullName: string, email: string, password: string, userType: "candidate" | "recruiter") => {
-        // TODO: Replace with actual API call
-        // const response = await api.post('/auth/signup', { fullName, email, password, userType });
-        const mockUser: User = { id: "1", fullName, email, userType };
-        const mockToken = "mock-jwt-token-" + Date.now();
-        setUser(mockUser);
-        setToken(mockToken);
-        localStorage.setItem("user", JSON.stringify(mockUser));
-        localStorage.setItem("token", mockToken);
-    };
-
-    const logout = () => {
-        setUser(null);
-        setToken(null);
-        localStorage.removeItem("user");
-        localStorage.removeItem("token");
-    };
-
-    return (
-        <AuthContext.Provider value={{ user, token, isAuthenticated, login, signup, logout }}>
-            {children}
-        </AuthContext.Provider>
-    );
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        isAuthenticated,
+        login,
+        signup,
+        logout,
+        updateUserName,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 };

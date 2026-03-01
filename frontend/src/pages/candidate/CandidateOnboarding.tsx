@@ -3,287 +3,941 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import Logo from "@/components/Logo";
-import { Plus, Trash2, FileText, PenLine, Upload, FileCheck, CheckCircle2 } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  FileText,
+  PenLine,
+  Upload,
+  CheckCircle2,
+  Loader2,
+  AlertTriangle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import api from "@/api/axios";
 
-interface Skill { name: string; proficiency: string }
-interface Project { name: string; description: string; skillsUsed: string; role: string }
-interface Experience { company: string; type: string; role: string; duration: string }
+interface Skill {
+  name: string;
+  proficiency: string;
+}
+interface Project {
+  name: string;
+  description: string;
+  skillsUsed: string;
+  role: string;
+}
+interface Experience {
+  company: string;
+  type: string;
+  role: string;
+  duration: string;
+}
 
-const steps = ["Personal Details", "Technical Skills", "Project Details", "Experience"];
+const steps = [
+  "Personal Details",
+  "Technical Skills",
+  "Project Details",
+  "Experience",
+];
 
 const CandidateOnboarding = () => {
-    const navigate = useNavigate();
-    const { user } = useAuth();
-    const fileInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+  const { user, updateUserName } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Mode selection
-    const [mode, setMode] = useState<"select" | "manual" | "resume">("select");
-    const [currentStep, setCurrentStep] = useState(0);
+  const [mode, setMode] = useState<"select" | "manual" | "resume" | "clarify">(
+    "select",
+  );
+  const [currentStep, setCurrentStep] = useState(0);
+  const [saving, setSaving] = useState(false);
 
-    // Resume
-    const [uploaded, setUploaded] = useState(false);
-    const [fileName, setFileName] = useState("");
+  // Field-level validation errors
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-    // Step 1 — Personal
-    const [personal, setPersonal] = useState({
-        fullName: user?.fullName || "",
-        email: user?.email || "",
-        phone: "",
-        location: "",
-        linkedin: "",
-    });
+  // Resume
+  const [uploaded, setUploaded] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [fileName, setFileName] = useState("");
 
-    // Step 2 — Skills
-    const [skills, setSkills] = useState<Skill[]>([{ name: "", proficiency: "" }]);
+  // Step 1 — Personal
+  const [personal, setPersonal] = useState({
+    fullName: user?.fullName || "",
+    email: user?.email || "",
+    phone: "",
+    location: "",
+    linkedin: "",
+  });
 
-    // Step 3 — Projects
-    const [projects, setProjects] = useState<Project[]>([{ name: "", description: "", skillsUsed: "", role: "" }]);
+  // Step 2 — Skills
+  const [skills, setSkills] = useState<Skill[]>([
+    { name: "", proficiency: "" },
+  ]);
 
-    // Step 4 — Experience
-    const [experiences, setExperiences] = useState<Experience[]>([{ company: "", type: "", role: "", duration: "" }]);
+  // Clarification skills (uncertain skills from resume parse that need proficiency)
+  const [uncertainSkills, setUncertainSkills] = useState<Skill[]>([]);
 
-    const addSkill = () => setSkills([...skills, { name: "", proficiency: "" }]);
-    const removeSkill = (i: number) => setSkills(skills.filter((_, idx) => idx !== i));
-    const addProject = () => setProjects([...projects, { name: "", description: "", skillsUsed: "", role: "" }]);
-    const removeProject = (i: number) => setProjects(projects.filter((_, idx) => idx !== i));
-    const addExperience = () => setExperiences([...experiences, { company: "", type: "", role: "", duration: "" }]);
-    const removeExperience = (i: number) => setExperiences(experiences.filter((_, idx) => idx !== i));
+  // Step 3 — Projects
+  const [projects, setProjects] = useState<Project[]>([
+    { name: "", description: "", skillsUsed: "", role: "" },
+  ]);
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setFileName(file.name);
-            setUploaded(true);
-            // Mock AI extraction — auto-populate skills
-            setSkills([
-                { name: "React", proficiency: "4" },
-                { name: "TypeScript", proficiency: "3" },
-                { name: "Python", proficiency: "3" },
-                { name: "SQL", proficiency: "2" },
-            ]);
-            setPersonal((p) => ({ ...p, phone: "555-0123", location: "San Francisco, CA" }));
-            toast.success("Resume parsed! Review and edit your details below.");
-            setMode("manual");
+  // Step 4 — Experience
+  const [experiences, setExperiences] = useState<Experience[]>([
+    { company: "", type: "", role: "", duration: "" },
+  ]);
+
+  const addSkill = () => setSkills([...skills, { name: "", proficiency: "" }]);
+  const removeSkill = (i: number) =>
+    setSkills(skills.filter((_, idx) => idx !== i));
+  const addProject = () =>
+    setProjects([
+      ...projects,
+      { name: "", description: "", skillsUsed: "", role: "" },
+    ]);
+  const removeProject = (i: number) =>
+    setProjects(projects.filter((_, idx) => idx !== i));
+  const addExperience = () =>
+    setExperiences([
+      ...experiences,
+      { company: "", type: "", role: "", duration: "" },
+    ]);
+  const removeExperience = (i: number) =>
+    setExperiences(experiences.filter((_, idx) => idx !== i));
+
+  const validateStep = (step: number): boolean => {
+    const newErrors: Record<string, string> = {};
+    if (step === 0) {
+      if (!personal.fullName.trim())
+        newErrors.fullName = "This field is mandatory.";
+      if (!personal.email.trim()) newErrors.email = "This field is mandatory.";
+      if (!personal.phone.trim()) newErrors.phone = "This field is mandatory.";
+      if (!personal.location.trim())
+        newErrors.location = "This field is mandatory.";
+    }
+    if (step === 1) {
+      const validSkills = skills.filter((s) => s.name.trim() && s.proficiency);
+      if (validSkills.length === 0)
+        newErrors.skills =
+          "Please add at least one skill with a proficiency level.";
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const nextStep = () => {
+    if (validateStep(currentStep)) {
+      setCurrentStep((prev) => prev + 1);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    setUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("resume", file);
+      const { data } = await api.post("/candidates/resume", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const parsed = data.parsed;
+
+      // Auto-fill personal info
+      if (parsed.name) setPersonal((p) => ({ ...p, fullName: parsed.name }));
+      if (parsed.email) setPersonal((p) => ({ ...p, email: parsed.email }));
+      if (parsed.phone) setPersonal((p) => ({ ...p, phone: parsed.phone }));
+      if (parsed.location)
+        setPersonal((p) => ({ ...p, location: parsed.location }));
+      if (parsed.linkedinUrl)
+        setPersonal((p) => ({ ...p, linkedin: parsed.linkedinUrl }));
+
+      // Set high-confidence skills
+      const highConf = (parsed.highConfidenceSkills || parsed.skills || []).map(
+        (s: any) => ({
+          name: s.skillName,
+          proficiency: String(s.proficiency),
+        }),
+      );
+      if (highConf.length > 0) setSkills(highConf);
+
+      // Set uncertain skills for clarification
+      const uncertain = (parsed.uncertainSkills || []).map((s: any) => ({
+        name: s.skillName,
+        proficiency: String(s.proficiency),
+      }));
+
+      // Also extract projects and experience from resume
+      const parsedProjects = (parsed.projects || []).map((p: any) => ({
+        name: p.name || "",
+        description: p.description || "",
+        skillsUsed: Array.isArray(p.technologies)
+          ? p.technologies.join(", ")
+          : p.skillsUsed || "",
+        role: p.role || "",
+      }));
+      const parsedExperience = (parsed.experience || []).map((e: any) => ({
+        company: e.company || "",
+        type: e.type || "",
+        role: e.role || "",
+        duration: e.duration || "",
+      }));
+
+      // Fill state with parsed data
+      if (parsedProjects.length > 0) setProjects(parsedProjects);
+      if (parsedExperience.length > 0) setExperiences(parsedExperience);
+
+      setUploaded(true);
+
+      if (uncertain.length > 0) {
+        // Skills need clarification
+        setUncertainSkills(uncertain);
+        setMode("clarify");
+        toast.success(
+          "Resume parsed! Please confirm proficiency for some inferred skills.",
+        );
+      } else {
+        // Everything captured — go straight to finishing
+        toast.success("Resume parsed! Setting up your profile...");
+        await finishOnboarding(
+          parsed.name || personal.fullName || user?.fullName || "",
+          parsed.phone || personal.phone,
+          parsed.location || personal.location,
+          parsed.linkedinUrl || personal.linkedin,
+          highConf,
+          parsedProjects,
+          parsedExperience,
+        );
+      }
+    } catch (err: any) {
+      toast.error(
+        err.response?.data?.error ||
+          "Failed to parse resume. Try manual entry.",
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const finishOnboarding = async (
+    name: string,
+    phone: string,
+    location: string,
+    linkedin: string,
+    allSkills: Skill[],
+    projData?: Project[],
+    expData?: Experience[],
+  ) => {
+    const validSkills = allSkills.filter((s) => s.name.trim() && s.proficiency);
+    if (validSkills.length === 0) {
+      toast.error("No skills detected. Please enter manually.");
+      setMode("manual");
+      return;
+    }
+    setSaving(true);
+    try {
+      // Sanitize linkedin: must be a valid URL or null/empty
+      let cleanLinkedin: string | null = null;
+      if (linkedin && linkedin.trim()) {
+        try {
+          // Prefix with https if missing
+          let url = linkedin.trim();
+          if (!url.startsWith("http")) url = "https://" + url;
+          new URL(url); // validate
+          cleanLinkedin = url;
+        } catch {
+          cleanLinkedin = null; // invalid URL — skip
         }
-    };
+      }
 
-    const handleFinish = () => {
-        toast.success("Profile setup complete!");
-        navigate("/dashboard/candidate");
-    };
+      // Filter valid projects/experience
+      const validProjects = (projData || projects).filter((p) => p.name.trim());
+      const validExperience = (expData || experiences).filter((e) =>
+        e.company.trim(),
+      );
 
-    // Mode selection screen
-    if (mode === "select") {
-        return (
-            <div className="min-h-screen bg-retro-beige paper-texture flex items-center justify-center p-4">
-                <div className="w-full max-w-lg space-y-8 animate-fade-in text-center">
-                    <div className="flex justify-center mb-6"><Logo /></div>
-                    <h1 className="text-2xl font-bold font-heading">Set Up Your Profile</h1>
-                    <p className="text-muted-foreground">Choose how you'd like to add your details</p>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-8">
-                        <button
-                            onClick={() => setMode("manual")}
-                            className="group p-8 polished-card text-center space-y-4 cursor-pointer"
-                        >
-                            <div className="h-14 w-14 rounded-xl bg-accent flex items-center justify-center mx-auto group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                                <PenLine className="h-7 w-7" />
-                            </div>
-                            <h3 className="font-semibold font-heading">Enter Manually</h3>
-                            <p className="text-sm text-muted-foreground">Fill in your skills, projects, and experience step by step</p>
-                        </button>
-
-                        <button
-                            onClick={() => setMode("resume")}
-                            className="group p-8 polished-card text-center space-y-4 cursor-pointer"
-                        >
-                            <div className="h-14 w-14 rounded-xl bg-accent flex items-center justify-center mx-auto group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                                <FileText className="h-7 w-7" />
-                            </div>
-                            <h3 className="font-semibold font-heading">Upload Resume</h3>
-                            <p className="text-sm text-muted-foreground">Let AI extract your skills and experience automatically</p>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
+      await api.put("/candidates/onboarding", {
+        name: (name || "User").trim().substring(0, 100),
+        phone: phone?.trim() || null,
+        location: location?.trim() || null,
+        linkedinUrl: cleanLinkedin,
+        skills: validSkills.map((s) => {
+          const prof = parseInt(s.proficiency);
+          return {
+            skillName: s.name.trim().substring(0, 50),
+            proficiency: isNaN(prof) ? 2 : Math.min(Math.max(prof, 1), 5),
+          };
+        }),
+        projects: validProjects,
+        experience: validExperience,
+      });
+      updateUserName((name || "User").trim());
+      toast.success("Profile setup complete!");
+      navigate("/dashboard/candidate");
+    } catch (err: any) {
+      const resp = err.response?.data;
+      let msg = "Failed to save profile.";
+      if (resp?.details && Array.isArray(resp.details)) {
+        msg = resp.details
+          .map((d: any) => `${d.field}: ${d.message}`)
+          .join(", ");
+      } else if (resp?.error) {
+        msg = resp.error;
+      }
+      toast.error(msg);
+    } finally {
+      setSaving(false);
     }
+  };
 
-    // Resume upload screen
-    if (mode === "resume" && !uploaded) {
-        return (
-            <div className="min-h-screen bg-background flex items-center justify-center p-4">
-                <div className="w-full max-w-lg space-y-8 animate-fade-in">
-                    <div className="text-center">
-                        <div className="flex justify-center mb-6"><Logo /></div>
-                        <h1 className="text-2xl font-bold font-heading">Upload Your Resume</h1>
-                        <p className="text-sm text-muted-foreground mt-1">PDF only — we'll extract your details automatically</p>
-                    </div>
-                    <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={handleFileUpload} />
-                    <div
-                        className="border-2 border-dashed border-border rounded-xl p-12 text-center hover:border-primary transition-colors cursor-pointer bg-card"
-                        onClick={() => fileInputRef.current?.click()}
-                    >
-                        <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                        <p className="font-medium">Drop your resume here or click to upload</p>
-                        <p className="text-sm text-muted-foreground mt-1">PDF only (max 10MB)</p>
-                    </div>
-                    <Button variant="outline" className="w-full" onClick={() => setMode("select")}>Back</Button>
-                </div>
-            </div>
-        );
+  const handleFinish = async () => {
+    const validSkills = skills.filter((s) => s.name.trim() && s.proficiency);
+    if (validSkills.length === 0) {
+      toast.error("Please add at least one skill with a proficiency level.");
+      setCurrentStep(1);
+      return;
     }
-
-    // Multi-step form
-    return (
-        <div className="min-h-screen bg-background py-8 px-4">
-            <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
-                <div className="flex justify-center mb-4"><Logo /></div>
-                <h1 className="text-2xl font-bold font-heading text-center">Complete Your Profile</h1>
-
-                {/* Progress stepper */}
-                <div className="flex items-center justify-center gap-2 mb-8">
-                    {steps.map((step, i) => (
-                        <div key={step} className="flex items-center gap-2">
-                            <div className={`flex items-center justify-center h-8 w-8 rounded-full text-sm font-bold transition-colors ${i < currentStep ? "bg-success text-success-foreground" :
-                                i === currentStep ? "gradient-primary text-primary-foreground" :
-                                    "bg-muted text-muted-foreground"
-                                }`}>
-                                {i < currentStep ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
-                            </div>
-                            {!false && <span className={`text-xs hidden sm:inline ${i === currentStep ? "font-semibold" : "text-muted-foreground"}`}>{step}</span>}
-                            {i < steps.length - 1 && <div className={`w-8 h-0.5 ${i < currentStep ? "bg-success" : "bg-border"}`} />}
-                        </div>
-                    ))}
-                </div>
-
-                {/* Step 1 — Personal Details */}
-                {currentStep === 0 && (
-                    <div className="polished-card-static p-6 space-y-4">
-                        <h2 className="font-semibold font-heading text-lg">Personal Details</h2>
-                        <div className="space-y-1"><label className="text-sm font-medium">Full Name *</label><Input required value={personal.fullName} onChange={(e) => setPersonal({ ...personal, fullName: e.target.value })} /></div>
-                        <div className="space-y-1"><label className="text-sm font-medium">Email *</label><Input type="email" required value={personal.email} onChange={(e) => setPersonal({ ...personal, email: e.target.value })} /></div>
-                        <div className="space-y-1"><label className="text-sm font-medium">Phone *</label><Input type="tel" required value={personal.phone} onChange={(e) => setPersonal({ ...personal, phone: e.target.value })} /></div>
-                        <div className="space-y-1"><label className="text-sm font-medium">Location *</label><Input placeholder="City, State" required value={personal.location} onChange={(e) => setPersonal({ ...personal, location: e.target.value })} /></div>
-                        <div className="space-y-1"><label className="text-sm font-medium">LinkedIn URL</label><Input placeholder="https://linkedin.com/in/..." value={personal.linkedin} onChange={(e) => setPersonal({ ...personal, linkedin: e.target.value })} /></div>
-                        <Button className="w-full" onClick={() => setCurrentStep(1)}>Next</Button>
-                    </div>
-                )}
-
-                {/* Step 2 — Technical Skills */}
-                {currentStep === 1 && (
-                    <div className="polished-card-static p-6 space-y-4">
-                        <div className="flex justify-between items-center">
-                            <h2 className="font-semibold font-heading text-lg">Technical Skills</h2>
-                            <Button type="button" variant="outline" size="sm" onClick={addSkill} className="gap-1"><Plus className="h-3 w-3" /> Add Skill</Button>
-                        </div>
-                        {skills.map((s, i) => (
-                            <div key={i} className="flex gap-3 items-end">
-                                <div className="flex-1 space-y-1">
-                                    <label className="text-sm font-medium">Skill Name</label>
-                                    <Input placeholder="e.g., React" value={s.name} onChange={(e) => { const n = [...skills]; n[i].name = e.target.value; setSkills(n); }} />
-                                </div>
-                                <div className="flex-1 space-y-1">
-                                    <label className="text-sm font-medium">Proficiency</label>
-                                    <Select value={s.proficiency} onValueChange={(v) => { const n = [...skills]; n[i].proficiency = v; setSkills(n); }}>
-                                        <SelectTrigger><SelectValue placeholder="Select level" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="1">1 - Beginner</SelectItem>
-                                            <SelectItem value="2">2 - Basic</SelectItem>
-                                            <SelectItem value="3">3 - Intermediate</SelectItem>
-                                            <SelectItem value="4">4 - Advanced</SelectItem>
-                                            <SelectItem value="5">5 - Expert</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                {skills.length > 1 && (
-                                    <Button type="button" variant="ghost" size="icon" onClick={() => removeSkill(i)} className="text-destructive shrink-0">
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                )}
-                            </div>
-                        ))}
-                        <div className="flex gap-3">
-                            <Button variant="outline" className="flex-1" onClick={() => setCurrentStep(0)}>Back</Button>
-                            <Button className="flex-1" onClick={() => setCurrentStep(2)}>Next</Button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Step 3 — Projects */}
-                {currentStep === 2 && (
-                    <div className="polished-card-static p-6 space-y-4">
-                        <div className="flex justify-between items-center">
-                            <h2 className="font-semibold font-heading text-lg">Project Details <span className="text-sm font-normal text-muted-foreground">(optional)</span></h2>
-                            <Button type="button" variant="outline" size="sm" onClick={addProject} className="gap-1"><Plus className="h-3 w-3" /> Add Project</Button>
-                        </div>
-                        {projects.map((p, i) => (
-                            <div key={i} className="space-y-3 p-4 bg-background rounded-lg border border-border">
-                                <div className="flex justify-between">
-                                    <span className="text-sm font-medium">Project {i + 1}</span>
-                                    {projects.length > 1 && (
-                                        <Button type="button" variant="ghost" size="icon" onClick={() => removeProject(i)} className="text-destructive h-6 w-6">
-                                            <Trash2 className="h-3 w-3" />
-                                        </Button>
-                                    )}
-                                </div>
-                                <Input placeholder="Project Name" value={p.name} onChange={(e) => { const n = [...projects]; n[i].name = e.target.value; setProjects(n); }} />
-                                <Textarea placeholder="Description" rows={2} value={p.description} onChange={(e) => { const n = [...projects]; n[i].description = e.target.value; setProjects(n); }} />
-                                <Input placeholder="Skills Used (comma separated)" value={p.skillsUsed} onChange={(e) => { const n = [...projects]; n[i].skillsUsed = e.target.value; setProjects(n); }} />
-                                <Input placeholder="Your Role" value={p.role} onChange={(e) => { const n = [...projects]; n[i].role = e.target.value; setProjects(n); }} />
-                            </div>
-                        ))}
-                        <div className="flex gap-3">
-                            <Button variant="outline" className="flex-1" onClick={() => setCurrentStep(1)}>Back</Button>
-                            <Button variant="outline" className="flex-1" onClick={() => setCurrentStep(3)}>Skip</Button>
-                            <Button className="flex-1" onClick={() => setCurrentStep(3)}>Next</Button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Step 4 — Experience */}
-                {currentStep === 3 && (
-                    <div className="polished-card-static p-6 space-y-4">
-                        <div className="flex justify-between items-center">
-                            <h2 className="font-semibold font-heading text-lg">Experience Details <span className="text-sm font-normal text-muted-foreground">(optional)</span></h2>
-                            <Button type="button" variant="outline" size="sm" onClick={addExperience} className="gap-1"><Plus className="h-3 w-3" /> Add Experience</Button>
-                        </div>
-                        {experiences.map((exp, i) => (
-                            <div key={i} className="space-y-3 p-4 bg-background rounded-lg border border-border">
-                                <div className="flex justify-between">
-                                    <span className="text-sm font-medium">Experience {i + 1}</span>
-                                    {experiences.length > 1 && (
-                                        <Button type="button" variant="ghost" size="icon" onClick={() => removeExperience(i)} className="text-destructive h-6 w-6">
-                                            <Trash2 className="h-3 w-3" />
-                                        </Button>
-                                    )}
-                                </div>
-                                <Input placeholder="Company Name" value={exp.company} onChange={(e) => { const n = [...experiences]; n[i].company = e.target.value; setExperiences(n); }} />
-                                <Select value={exp.type} onValueChange={(v) => { const n = [...experiences]; n[i].type = v; setExperiences(n); }}>
-                                    <SelectTrigger><SelectValue placeholder="Type (Internship / Job)" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="internship">Internship</SelectItem>
-                                        <SelectItem value="job">Job</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <Input placeholder="Role / Position" value={exp.role} onChange={(e) => { const n = [...experiences]; n[i].role = e.target.value; setExperiences(n); }} />
-                                <Input placeholder="Duration (e.g., 3 months)" value={exp.duration} onChange={(e) => { const n = [...experiences]; n[i].duration = e.target.value; setExperiences(n); }} />
-                            </div>
-                        ))}
-                        <div className="flex gap-3">
-                            <Button variant="outline" className="flex-1" onClick={() => setCurrentStep(2)}>Back</Button>
-                            <Button variant="outline" className="flex-1" onClick={handleFinish}>Skip</Button>
-                            <Button className="flex-1" onClick={handleFinish}>Finish</Button>
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
+    await finishOnboarding(
+      personal.fullName,
+      personal.phone,
+      personal.location,
+      personal.linkedin,
+      validSkills,
     );
+  };
+
+  const handleClarifyFinish = async () => {
+    // Merge high-confidence skills + clarified uncertain skills
+    const allSkills = [...skills, ...uncertainSkills];
+    await finishOnboarding(
+      personal.fullName,
+      personal.phone,
+      personal.location,
+      personal.linkedin,
+      allSkills,
+    );
+  };
+
+  // Mode: Select entry method
+  if (mode === "select") {
+    return (
+      <div className="min-h-screen bg-retro-beige paper-texture flex items-center justify-center p-4">
+        <div className="w-full max-w-lg space-y-8 animate-fade-in text-center">
+          <div className="flex justify-center mb-6">
+            <Logo />
+          </div>
+          <h1 className="text-2xl font-bold font-heading">
+            Set Up Your Profile
+          </h1>
+          <p className="text-muted-foreground">
+            Choose how you'd like to add your details
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-8">
+            <button
+              onClick={() => setMode("manual")}
+              className="group p-8 polished-card text-center space-y-4 cursor-pointer"
+            >
+              <div className="h-14 w-14 rounded-xl bg-retro-charcoal text-white flex items-center justify-center mx-auto group-hover:bg-retro-gold transition-colors">
+                <PenLine className="h-7 w-7" />
+              </div>
+              <h3 className="font-semibold font-heading">Enter Manually</h3>
+              <p className="text-sm text-muted-foreground">
+                Fill in your skills, projects, and experience step by step
+              </p>
+            </button>
+
+            <button
+              onClick={() => setMode("resume")}
+              className="group p-8 polished-card text-center space-y-4 cursor-pointer"
+            >
+              <div className="h-14 w-14 rounded-xl bg-retro-charcoal text-white flex items-center justify-center mx-auto group-hover:bg-retro-gold transition-colors">
+                <FileText className="h-7 w-7" />
+              </div>
+              <h3 className="font-semibold font-heading">Upload Resume</h3>
+              <p className="text-sm text-muted-foreground">
+                Let AI extract your skills and experience automatically
+              </p>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Mode: Resume upload
+  if (mode === "resume" && !uploaded) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-lg space-y-8 animate-fade-in">
+          <div className="text-center">
+            <div className="flex justify-center mb-6">
+              <Logo />
+            </div>
+            <h1 className="text-2xl font-bold font-heading">
+              Upload Your Resume
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              PDF only — we'll extract your details automatically
+            </p>
+          </div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            accept=".pdf"
+            onChange={handleFileUpload}
+          />
+          <div
+            className="border-2 border-dashed border-border rounded-xl p-12 text-center hover:border-primary transition-colors cursor-pointer bg-card"
+            onClick={() => !uploading && fileInputRef.current?.click()}
+          >
+            {uploading ? (
+              <>
+                <Loader2 className="h-12 w-12 mx-auto text-primary mb-4 animate-spin" />
+                <p className="font-medium">Parsing your resume…</p>
+              </>
+            ) : (
+              <>
+                <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="font-medium">
+                  Drop your resume here or click to upload
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  PDF only (max 5MB)
+                </p>
+              </>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => setMode("select")}
+            disabled={uploading}
+          >
+            Back
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Mode: Clarify uncertain skills
+  if (mode === "clarify") {
+    return (
+      <div className="min-h-screen bg-background py-8 px-4">
+        <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
+          <div className="flex justify-center mb-4">
+            <Logo />
+          </div>
+          <h1 className="text-2xl font-bold font-heading text-center">
+            Almost Done!
+          </h1>
+
+          <div className="polished-card-static p-6 space-y-5">
+            <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-amber-800">
+                  Please provide some clarification on the following skills
+                </p>
+                <p className="text-sm text-amber-700 mt-1">
+                  These skills were inferred from your resume. Please confirm or
+                  adjust the proficiency level for each.
+                </p>
+              </div>
+            </div>
+
+            {uncertainSkills.map((s, i) => (
+              <div key={i} className="flex gap-3 items-end">
+                <div className="flex-1 space-y-1">
+                  <label className="text-sm font-medium">Skill</label>
+                  <Input value={s.name} readOnly className="bg-muted" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <label className="text-sm font-medium">Proficiency</label>
+                  <Select
+                    value={s.proficiency}
+                    onValueChange={(v) => {
+                      const n = [...uncertainSkills];
+                      n[i].proficiency = v;
+                      setUncertainSkills(n);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 - Beginner</SelectItem>
+                      <SelectItem value="2">2 - Basic</SelectItem>
+                      <SelectItem value="3">3 - Intermediate</SelectItem>
+                      <SelectItem value="4">4 - Advanced</SelectItem>
+                      <SelectItem value="5">5 - Expert</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            ))}
+
+            <Button
+              className="w-full"
+              onClick={handleClarifyFinish}
+              disabled={saving}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…
+                </>
+              ) : (
+                "Finish"
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Mode: Multi-step manual form
+  return (
+    <div className="min-h-screen bg-background py-8 px-4">
+      <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
+        <div className="flex justify-center mb-4">
+          <Logo />
+        </div>
+        <h1 className="text-2xl font-bold font-heading text-center">
+          Complete Your Profile
+        </h1>
+
+        {/* Progress stepper */}
+        <div className="flex items-center justify-center gap-2 mb-8">
+          {steps.map((step, i) => (
+            <div key={step} className="flex items-center gap-2">
+              <div
+                className={`flex items-center justify-center h-8 w-8 rounded-full text-sm font-bold transition-colors ${
+                  i < currentStep
+                    ? "bg-success text-success-foreground"
+                    : i === currentStep
+                      ? "gradient-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {i < currentStep ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
+              </div>
+              <span
+                className={`text-xs hidden sm:inline ${i === currentStep ? "font-semibold" : "text-muted-foreground"}`}
+              >
+                {step}
+              </span>
+              {i < steps.length - 1 && (
+                <div
+                  className={`w-8 h-0.5 ${i < currentStep ? "bg-success" : "bg-border"}`}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Step 1 — Personal Details */}
+        {currentStep === 0 && (
+          <div className="polished-card-static p-6 space-y-4">
+            <h2 className="font-semibold font-heading text-lg">
+              Personal Details
+            </h2>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Full Name *</label>
+              <Input
+                required
+                value={personal.fullName}
+                onChange={(e) => {
+                  setPersonal({ ...personal, fullName: e.target.value });
+                  setErrors((prev) => ({ ...prev, fullName: "" }));
+                }}
+                className={errors.fullName ? "border-destructive" : ""}
+              />
+              {errors.fullName && (
+                <p className="text-xs text-destructive">{errors.fullName}</p>
+              )}
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Email *</label>
+              <Input
+                type="email"
+                required
+                value={personal.email}
+                onChange={(e) => {
+                  setPersonal({ ...personal, email: e.target.value });
+                  setErrors((prev) => ({ ...prev, email: "" }));
+                }}
+                className={errors.email ? "border-destructive" : ""}
+              />
+              {errors.email && (
+                <p className="text-xs text-destructive">{errors.email}</p>
+              )}
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Phone *</label>
+              <Input
+                type="tel"
+                required
+                value={personal.phone}
+                onChange={(e) => {
+                  setPersonal({ ...personal, phone: e.target.value });
+                  setErrors((prev) => ({ ...prev, phone: "" }));
+                }}
+                className={errors.phone ? "border-destructive" : ""}
+              />
+              {errors.phone && (
+                <p className="text-xs text-destructive">{errors.phone}</p>
+              )}
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Location *</label>
+              <Input
+                placeholder="City, State"
+                required
+                value={personal.location}
+                onChange={(e) => {
+                  setPersonal({ ...personal, location: e.target.value });
+                  setErrors((prev) => ({ ...prev, location: "" }));
+                }}
+                className={errors.location ? "border-destructive" : ""}
+              />
+              {errors.location && (
+                <p className="text-xs text-destructive">{errors.location}</p>
+              )}
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">LinkedIn URL</label>
+              <Input
+                placeholder="https://linkedin.com/in/..."
+                value={personal.linkedin}
+                onChange={(e) =>
+                  setPersonal({ ...personal, linkedin: e.target.value })
+                }
+              />
+            </div>
+            <Button className="w-full" onClick={nextStep}>
+              Next
+            </Button>
+          </div>
+        )}
+
+        {/* Step 2 — Technical Skills */}
+        {currentStep === 1 && (
+          <div className="polished-card-static p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="font-semibold font-heading text-lg">
+                Technical Skills
+              </h2>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addSkill}
+                className="gap-1"
+              >
+                <Plus className="h-3 w-3" /> Add Skill
+              </Button>
+            </div>
+            {errors.skills && (
+              <p className="text-xs text-destructive">{errors.skills}</p>
+            )}
+            {skills.map((s, i) => (
+              <div key={i} className="flex gap-3 items-end">
+                <div className="flex-1 space-y-1">
+                  <label className="text-sm font-medium">Skill Name</label>
+                  <Input
+                    placeholder="e.g., React"
+                    value={s.name}
+                    onChange={(e) => {
+                      const n = [...skills];
+                      n[i].name = e.target.value;
+                      setSkills(n);
+                    }}
+                  />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <label className="text-sm font-medium">Proficiency</label>
+                  <Select
+                    value={s.proficiency}
+                    onValueChange={(v) => {
+                      const n = [...skills];
+                      n[i].proficiency = v;
+                      setSkills(n);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 - Beginner</SelectItem>
+                      <SelectItem value="2">2 - Basic</SelectItem>
+                      <SelectItem value="3">3 - Intermediate</SelectItem>
+                      <SelectItem value="4">4 - Advanced</SelectItem>
+                      <SelectItem value="5">5 - Expert</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {skills.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeSkill(i)}
+                    className="text-destructive shrink-0"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setCurrentStep(0)}
+              >
+                Back
+              </Button>
+              <Button className="flex-1" onClick={nextStep}>
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3 — Projects */}
+        {currentStep === 2 && (
+          <div className="polished-card-static p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="font-semibold font-heading text-lg">
+                Project Details{" "}
+                <span className="text-sm font-normal text-muted-foreground">
+                  (optional)
+                </span>
+              </h2>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addProject}
+                className="gap-1"
+              >
+                <Plus className="h-3 w-3" /> Add Project
+              </Button>
+            </div>
+            {projects.map((p, i) => (
+              <div
+                key={i}
+                className="space-y-3 p-4 bg-background rounded-lg border border-border"
+              >
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">Project {i + 1}</span>
+                  {projects.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeProject(i)}
+                      className="text-destructive h-6 w-6"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+                <Input
+                  placeholder="Project Name"
+                  value={p.name}
+                  onChange={(e) => {
+                    const n = [...projects];
+                    n[i].name = e.target.value;
+                    setProjects(n);
+                  }}
+                />
+                <Textarea
+                  placeholder="Description"
+                  rows={2}
+                  value={p.description}
+                  onChange={(e) => {
+                    const n = [...projects];
+                    n[i].description = e.target.value;
+                    setProjects(n);
+                  }}
+                />
+                <Input
+                  placeholder="Skills Used (comma separated)"
+                  value={p.skillsUsed}
+                  onChange={(e) => {
+                    const n = [...projects];
+                    n[i].skillsUsed = e.target.value;
+                    setProjects(n);
+                  }}
+                />
+                <Input
+                  placeholder="Your Role"
+                  value={p.role}
+                  onChange={(e) => {
+                    const n = [...projects];
+                    n[i].role = e.target.value;
+                    setProjects(n);
+                  }}
+                />
+              </div>
+            ))}
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setCurrentStep(1)}
+              >
+                Back
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setCurrentStep(3)}
+              >
+                Skip
+              </Button>
+              <Button className="flex-1" onClick={() => setCurrentStep(3)}>
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4 — Experience */}
+        {currentStep === 3 && (
+          <div className="polished-card-static p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="font-semibold font-heading text-lg">
+                Experience Details{" "}
+                <span className="text-sm font-normal text-muted-foreground">
+                  (optional)
+                </span>
+              </h2>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addExperience}
+                className="gap-1"
+              >
+                <Plus className="h-3 w-3" /> Add Experience
+              </Button>
+            </div>
+            {experiences.map((exp, i) => (
+              <div
+                key={i}
+                className="space-y-3 p-4 bg-background rounded-lg border border-border"
+              >
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">
+                    Experience {i + 1}
+                  </span>
+                  {experiences.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeExperience(i)}
+                      className="text-destructive h-6 w-6"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+                <Input
+                  placeholder="Company Name"
+                  value={exp.company}
+                  onChange={(e) => {
+                    const n = [...experiences];
+                    n[i].company = e.target.value;
+                    setExperiences(n);
+                  }}
+                />
+                <Select
+                  value={exp.type}
+                  onValueChange={(v) => {
+                    const n = [...experiences];
+                    n[i].type = v;
+                    setExperiences(n);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Type (Internship / Job)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="internship">Internship</SelectItem>
+                    <SelectItem value="job">Job</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Role / Position"
+                  value={exp.role}
+                  onChange={(e) => {
+                    const n = [...experiences];
+                    n[i].role = e.target.value;
+                    setExperiences(n);
+                  }}
+                />
+                <Input
+                  placeholder="Duration (e.g., 3 months)"
+                  value={exp.duration}
+                  onChange={(e) => {
+                    const n = [...experiences];
+                    n[i].duration = e.target.value;
+                    setExperiences(n);
+                  }}
+                />
+              </div>
+            ))}
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setCurrentStep(2)}
+              >
+                Back
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={handleFinish}
+                disabled={saving}
+              >
+                Skip
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleFinish}
+                disabled={saving}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…
+                  </>
+                ) : (
+                  "Finish"
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default CandidateOnboarding;

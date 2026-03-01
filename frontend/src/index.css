@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;0,900;1,500;1,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;0,900;1,500;1,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -28,15 +28,15 @@
     --muted: 34 18% 88%;
     --muted-foreground: 25 10% 45%;
 
-    /* Muted Olive accent */
-    --accent: 82 32% 36%;
+    /* Warm Amber accent */
+    --accent: 36 60% 45%;
     --accent-foreground: 40 50% 97%;
 
     /* Warning / orange */
     --destructive: 36 90% 44%;
     --destructive-foreground: 40 50% 97%;
 
-    --success: 82 32% 36%;
+    --success: 82 40% 42%;
     --success-foreground: 40 50% 97%;
 
     --warning: 43 70% 55%;
@@ -58,8 +58,8 @@
     --sidebar-border: 25 12% 18%;
     --sidebar-ring: 43 50% 55%;
 
-    --font-heading: 'Playfair Display', Georgia, serif;
-    --font-body: 'Inter', sans-serif;
+    --font-heading: "Playfair Display", Georgia, serif;
+    --font-body: "Inter", sans-serif;
   }
 
   .dark {
@@ -134,7 +134,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-
     *,
     *::before,
     *::after {
@@ -147,18 +146,23 @@
 }
 
 @layer utilities {
-
   /* ─── Polished card — 18px radius, soft shadow ─── */
   .polished-card {
-    background: #FFFFFF;
+    background: #ffffff;
     border: 1px solid rgba(47, 42, 36, 0.08);
     border-radius: 18px;
-    box-shadow: 0 2px 8px rgba(47, 42, 36, 0.06), 0 1px 3px rgba(47, 42, 36, 0.04);
-    transition: box-shadow 0.3s ease, transform 0.3s ease;
+    box-shadow:
+      0 2px 8px rgba(47, 42, 36, 0.06),
+      0 1px 3px rgba(47, 42, 36, 0.04);
+    transition:
+      box-shadow 0.3s ease,
+      transform 0.3s ease;
   }
 
   .polished-card:hover {
-    box-shadow: 0 10px 35px rgba(47, 42, 36, 0.12), 0 4px 14px rgba(47, 42, 36, 0.07);
+    box-shadow:
+      0 10px 35px rgba(47, 42, 36, 0.12),
+      0 4px 14px rgba(47, 42, 36, 0.07);
     transform: translateY(-2px);
   }
 
@@ -168,16 +172,18 @@
 
   /* Static version (no hover lift) */
   .polished-card-static {
-    background: #FFFFFF;
+    background: #ffffff;
     border: 1px solid rgba(47, 42, 36, 0.08);
     border-radius: 18px;
-    box-shadow: 0 2px 8px rgba(47, 42, 36, 0.06), 0 1px 3px rgba(47, 42, 36, 0.04);
+    box-shadow:
+      0 2px 8px rgba(47, 42, 36, 0.06),
+      0 1px 3px rgba(47, 42, 36, 0.04);
   }
 
   /* ─── Paper texture ─── */
   .paper-texture {
     position: relative;
-    background-color: #F1ECE3;
+    background-color: #f1ece3;
   }
 
   .paper-texture::before {
@@ -191,7 +197,7 @@
     background-size: 200px 200px;
   }
 
-  .paper-texture>* {
+  .paper-texture > * {
     position: relative;
     z-index: 1;
   }
@@ -213,8 +219,8 @@
   }
 
   .btn-primary {
-    background: #2F2A24;
-    color: #FFFFFF;
+    background: #2f2a24;
+    color: #ffffff;
     border: none;
     border-radius: 12px;
     font-weight: 600;
@@ -224,8 +230,8 @@
   }
 
   .btn-primary:hover {
-    background: #3D362E;
-    color: #FFFFFF !important;
+    background: #3d362e;
+    color: #ffffff !important;
     box-shadow: 0 6px 20px rgba(47, 42, 36, 0.25);
     transform: translateY(-1px);
   }
@@ -236,8 +242,8 @@
   }
 
   .btn-gold {
-    background: #C8A951;
-    color: #FFFFFF;
+    background: #c8a951;
+    color: #ffffff;
     border: none;
     border-radius: 12px;
     font-weight: 700;
@@ -247,7 +253,7 @@
 
   .btn-gold:hover {
     background: #a88a33;
-    color: #FFFFFF !important;
+    color: #ffffff !important;
     box-shadow: 0 6px 20px rgba(200, 169, 81, 0.35);
     transform: translateY(-1px);
   }
@@ -259,16 +265,16 @@
 
   .btn-outline-dark {
     background: transparent;
-    color: #2F2A24;
-    border: 1.5px solid #2F2A24;
+    color: #2f2a24;
+    border: 1.5px solid #2f2a24;
     border-radius: 12px;
     font-weight: 600;
     transition: all 0.3s ease;
   }
 
   .btn-outline-dark:hover {
-    background: #2F2A24;
-    color: #FFFFFF !important;
+    background: #2f2a24;
+    color: #ffffff !important;
     box-shadow: 0 4px 12px rgba(47, 42, 36, 0.15);
     transform: translateY(-1px);
   }
@@ -278,15 +284,17 @@
   }
 
   .input-polished {
-    background: #FFFFFF;
+    background: #ffffff;
     border: 1.5px solid rgba(47, 42, 36, 0.15);
     border-radius: 12px;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    transition:
+      border-color 0.3s ease,
+      box-shadow 0.3s ease;
   }
 
   .input-polished:focus {
-    border-color: #6B7A40;
-    box-shadow: 0 0 0 3px rgba(107, 122, 64, 0.12);
+    border-color: #b07d3a;
+    box-shadow: 0 0 0 3px rgba(176, 125, 58, 0.12);
     outline: none;
   }
 
@@ -295,7 +303,7 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    color: #8B7355;
+    color: #8b7355;
     font-size: 0.875rem;
     font-weight: 500;
   }
@@ -305,7 +313,7 @@
     content: "";
     flex: 1;
     height: 1px;
-    background: #D6CEBD;
+    background: #d6cebd;
   }
 
   /* ─── Tag / badge ─── */
@@ -318,8 +326,8 @@
     letter-spacing: 0.04em;
     text-transform: uppercase;
     border-radius: 8px;
-    background: #EDE6D6;
-    color: #2F2A24;
+    background: #ede6d6;
+    color: #2f2a24;
     border: 1px solid rgba(47, 42, 36, 0.08);
   }
 
@@ -351,11 +359,11 @@
   }
 
   .stamp-olive {
-    color: #6B7A40;
+    color: #6b7a40;
   }
 
   .stamp-orange {
-    color: #D97706;
+    color: #d97706;
   }
 
   /* ─── Score ring ─── */
@@ -365,13 +373,13 @@
 
   /* ─── Sidebar ─── */
   .sidebar-retro {
-    background: linear-gradient(180deg, #2F2A24 0%, #1A1714 100%);
+    background: linear-gradient(180deg, #2f2a24 0%, #1a1714 100%);
   }
 
   /* ─── Ticker tape ─── */
   .ticker-tape {
-    background: #2F2A24;
-    color: #C8A951;
+    background: #2f2a24;
+    color: #c8a951;
     font-family: var(--font-heading);
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -393,22 +401,24 @@
     border-radius: 12px;
     font-size: 0.8125rem;
     font-weight: 500;
-    color: #8B7355;
+    color: #8b7355;
     background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(8px);
     border: 1px solid rgba(47, 42, 36, 0.08);
     box-shadow: 0 2px 8px rgba(47, 42, 36, 0.06);
-    transition: color 0.2s ease, box-shadow 0.2s ease;
+    transition:
+      color 0.2s ease,
+      box-shadow 0.2s ease;
   }
 
   .back-btn-fixed:hover {
-    color: #2F2A24;
+    color: #2f2a24;
     box-shadow: 0 4px 12px rgba(47, 42, 36, 0.1);
   }
 
   /* ─── Stat box ─── */
   .stat-box {
-    background: #FFFFFF;
+    background: #ffffff;
     border: 1px solid rgba(47, 42, 36, 0.06);
     border-radius: 14px;
     padding: 1.25rem;

@@ -35,8 +35,24 @@ router.post(
     });
     if (!candidate) throw new ApiError(404, "Candidate not found.");
 
+    // Check if an INVITE notification already exists for this candidate + posting
+    const existing = await prisma.notification.findFirst({
+      where: { userId: candidate.userId, postingId, type: "INVITE" },
+    });
+    if (existing)
+      throw new ApiError(
+        409,
+        "An invitation has already been sent to this candidate for this posting.",
+      );
+
     const notification = await prisma.notification.create({
-      data: { userId: candidate.userId, postingId, message: data.message },
+      data: {
+        userId: candidate.userId,
+        postingId,
+        message: data.message,
+        type: "INVITE",
+        actionTaken: "NONE",
+      },
     });
 
     res.status(201).json({ message: "Notification sent.", notification });
@@ -51,7 +67,7 @@ router.get(
     const notifications = await prisma.notification.findMany({
       where: { userId: req.user.id },
       orderBy: { createdAt: "desc" },
-      include: { posting: { select: { id: true, title: true } } },
+      include: { posting: { select: { id: true, title: true, type: true } } },
     });
 
     const unreadCount = notifications.filter((n) => !n.read).length;
@@ -79,6 +95,102 @@ router.put(
       data: { read: true },
     });
     res.json({ message: "Notification marked as read." });
+  }),
+);
+
+// ─── PUT /notifications/:id/accept ───
+router.put(
+  "/:id/accept",
+  authenticate,
+  requireRole("CANDIDATE"),
+  catchAsync(async (req, res) => {
+    const notification = await prisma.notification.findUnique({
+      where: { id: req.params.id },
+      include: { posting: true },
+    });
+    if (!notification) throw new ApiError(404, "Notification not found.");
+    if (notification.userId !== req.user.id)
+      throw new ApiError(403, "Not your notification.");
+    if (notification.type !== "INVITE")
+      throw new ApiError(400, "This notification is not an invitation.");
+    if (notification.actionTaken !== "NONE")
+      throw new ApiError(
+        400,
+        `You have already ${notification.actionTaken.toLowerCase()} this invitation.`,
+      );
+
+    // Get candidate profile
+    const candidate = await prisma.candidateProfile.findUnique({
+      where: { userId: req.user.id },
+    });
+    if (!candidate) throw new ApiError(404, "Candidate profile not found.");
+
+    // Create application (if not already applied)
+    const existingApp = await prisma.application.findUnique({
+      where: {
+        candidateId_postingId: {
+          candidateId: candidate.id,
+          postingId: notification.postingId,
+        },
+      },
+    });
+
+    await prisma.$transaction(async (tx) => {
+      // Create application if not exists
+      if (!existingApp) {
+        await tx.application.create({
+          data: {
+            candidateId: candidate.id,
+            postingId: notification.postingId,
+          },
+        });
+      } else if (existingApp.withdrawn) {
+        // Re-apply if previously withdrawn
+        await tx.application.update({
+          where: { id: existingApp.id },
+          data: { withdrawn: false },
+        });
+      }
+
+      // Mark notification
+      await tx.notification.update({
+        where: { id: req.params.id },
+        data: { actionTaken: "ACCEPTED", read: true },
+      });
+    });
+
+    res.json({
+      message: "Invitation accepted! You are now applied to this posting.",
+    });
+  }),
+);
+
+// ─── PUT /notifications/:id/reject ───
+router.put(
+  "/:id/reject",
+  authenticate,
+  requireRole("CANDIDATE"),
+  catchAsync(async (req, res) => {
+    const notification = await prisma.notification.findUnique({
+      where: { id: req.params.id },
+    });
+    if (!notification) throw new ApiError(404, "Notification not found.");
+    if (notification.userId !== req.user.id)
+      throw new ApiError(403, "Not your notification.");
+    if (notification.type !== "INVITE")
+      throw new ApiError(400, "This notification is not an invitation.");
+    if (notification.actionTaken !== "NONE")
+      throw new ApiError(
+        400,
+        `You have already ${notification.actionTaken.toLowerCase()} this invitation.`,
+      );
+
+    await prisma.notification.update({
+      where: { id: req.params.id },
+      data: { actionTaken: "REJECTED", read: true },
+    });
+
+    res.json({ message: "Invitation declined." });
   }),
 );
 

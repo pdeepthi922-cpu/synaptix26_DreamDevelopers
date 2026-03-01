@@ -1,74 +1,262 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import ConfirmationModal from "@/components/ConfirmationModal";
 import { toast } from "sonner";
-import { Users, BarChart3, Pencil, Trash2, ArrowLeft, Plus, Bell } from "lucide-react";
+import {
+  Users,
+  BarChart3,
+  Pencil,
+  Trash2,
+  ArrowLeft,
+  Plus,
+  Bell,
+  Loader2,
+} from "lucide-react";
+import api from "@/api/axios";
 
-const rankingCandidates = [
-  { name: "John Doe", score: 92, applied: true },
-  { name: "Alice K.", score: 85, applied: true },
-  { name: "Bob M.", score: 72, applied: false },
-  { name: "Sarah L.", score: 68, applied: false },
-  { name: "Mike R.", score: 55, applied: false },
-];
+interface SkillWeight {
+  name: string;
+  weight: string;
+}
 
-const appliedCandidates = [
-  { name: "John Doe", score: 92, appliedDate: "Feb 20, 2026" },
-  { name: "Alice K.", score: 85, appliedDate: "Feb 22, 2026" },
-];
+interface PostingData {
+  id: string;
+  title: string;
+  description: string;
+  deadline: string;
+  location: string | null;
+  remote: boolean;
+  postingSkills: { skillName: string; weight: number }[];
+}
 
-interface SkillWeight { name: string; weight: string }
+interface RankingEntry {
+  rank: number;
+  candidateId: string;
+  candidateName: string;
+  score: number;
+  applicationStatus: { applied: boolean };
+}
+interface AppliedEntry {
+  candidateId: string;
+  candidateName: string;
+  score: number;
+  appliedAt: string;
+}
 
 const ManageProject = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [view, setView] = useState<"details" | "ranking" | "applied" | "edit">("details");
+  const [view, setView] = useState<"details" | "ranking" | "applied" | "edit">(
+    "details",
+  );
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<PostingData | null>(null);
 
-  const [skills, setSkills] = useState<SkillWeight[]>([
-    { name: "React", weight: "5" }, { name: "Node.js", weight: "4" },
-    { name: "SQL", weight: "3" }, { name: "Docker", weight: "3" },
-  ]);
+  // Edit form state
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [skills, setSkills] = useState<SkillWeight[]>([]);
+  const [editDeadline, setEditDeadline] = useState("");
   const [remote, setRemote] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // Rankings & applied
+  const [rankings, setRankings] = useState<RankingEntry[]>([]);
+  const [appliedCandidates, setAppliedCandidates] = useState<AppliedEntry[]>(
+    [],
+  );
+  const [rankLoading, setRankLoading] = useState(false);
+  const [appLoading, setAppLoading] = useState(false);
+
   const addSkill = () => setSkills([...skills, { name: "", weight: "" }]);
-  const removeSkill = (i: number) => setSkills(skills.filter((_, idx) => idx !== i));
+  const removeSkill = (i: number) =>
+    setSkills(skills.filter((_, idx) => idx !== i));
 
-  const handleDelete = () => {
-    toast.success("Project deleted successfully.");
-    navigate("/dashboard/recruiter");
+  useEffect(() => {
+    const fetchPosting = async () => {
+      try {
+        const { data: res } = await api.get(`/postings/${id}`);
+        const p = res.posting;
+        setData(p);
+        setEditTitle(p.title);
+        setEditDesc(p.description);
+        setSkills(
+          p.postingSkills.map((s: any) => ({
+            name: s.skillName,
+            weight: String(s.weight),
+          })),
+        );
+        setEditDeadline(p.deadline?.split("T")[0] || "");
+        setRemote(p.remote);
+      } catch {
+        toast.error("Failed to load project.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPosting();
+  }, [id]);
+
+  const fetchRankings = async () => {
+    if (rankings.length > 0) {
+      setView("ranking");
+      return;
+    }
+    setRankLoading(true);
+    try {
+      const { data: res } = await api.get(`/rankings/${id}`);
+      setRankings(res.rankings || []);
+      setView("ranking");
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to load rankings.");
+    } finally {
+      setRankLoading(false);
+    }
   };
 
-  const handleNotify = (name: string) => {
-    toast.success(`Notification sent to ${name}!`);
+  const fetchApplied = async () => {
+    if (appliedCandidates.length > 0) {
+      setView("applied");
+      return;
+    }
+    setAppLoading(true);
+    try {
+      const { data: res } = await api.get(`/applications/posting/${id}`);
+      setAppliedCandidates(res.applications || []);
+      setView("applied");
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to load applications.");
+    } finally {
+      setAppLoading(false);
+    }
   };
+
+  const handleSaveEdit = async () => {
+    setSaving(true);
+    try {
+      const validSkills = skills.filter((s) => s.name.trim() && s.weight);
+      await api.put(`/postings/${id}`, {
+        title: editTitle,
+        description: editDesc,
+        deadline: new Date(editDeadline).toISOString(),
+        remote,
+        location: remote ? null : "On-site",
+        skills: validSkills.map((s) => ({
+          skillName: s.name,
+          weight: parseInt(s.weight),
+        })),
+      });
+      toast.success("Changes saved!");
+      setView("details");
+      const { data: res } = await api.get(`/postings/${id}`);
+      setData(res.posting);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to save changes.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api.delete(`/postings/${id}`);
+      toast.success("Project deleted successfully.");
+      navigate("/dashboard/recruiter");
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to delete.");
+    }
+  };
+
+  const handleNotify = async (candidateId: string, name: string) => {
+    try {
+      await api.post(`/notifications/notify/${candidateId}/${id}`, {
+        message: `You've been recommended to apply for ${data?.title}!`,
+      });
+      toast.success(`Notification sent to ${name}!`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to send notification.");
+    }
+  };
+
+  if (loading || !data) {
+    return (
+      <DashboardLayout role="recruiter">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-retro-olive" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout role="recruiter">
       <div className="max-w-3xl animate-fade-in space-y-6">
-        <Link to="/dashboard/recruiter" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <Link
+          to="/dashboard/recruiter"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft className="h-4 w-4" /> Back to Dashboard
         </Link>
 
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <h1 className="text-2xl font-bold font-heading">E-Commerce Platform</h1>
+          <h1 className="text-2xl font-bold font-heading">{data.title}</h1>
           <div className="flex gap-2 flex-wrap">
-            <Button variant={view === "ranking" ? "default" : "outline"} size="sm" className="gap-1" onClick={() => setView("ranking")}>
-              <BarChart3 className="h-3 w-3" /> View Ranking
+            <Button
+              variant={view === "ranking" ? "default" : "outline"}
+              size="sm"
+              className="gap-1"
+              onClick={fetchRankings}
+              disabled={rankLoading}
+            >
+              {rankLoading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <BarChart3 className="h-3 w-3" />
+              )}{" "}
+              View Ranking
             </Button>
-            <Button variant={view === "applied" ? "default" : "outline"} size="sm" className="gap-1" onClick={() => setView("applied")}>
-              <Users className="h-3 w-3" /> Applied Candidates
+            <Button
+              variant={view === "applied" ? "default" : "outline"}
+              size="sm"
+              className="gap-1"
+              onClick={fetchApplied}
+              disabled={appLoading}
+            >
+              {appLoading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Users className="h-3 w-3" />
+              )}{" "}
+              Applied Candidates
             </Button>
-            <Button variant={view === "edit" ? "default" : "outline"} size="sm" className="gap-1" onClick={() => setView("edit")}>
+            <Button
+              variant={view === "edit" ? "default" : "outline"}
+              size="sm"
+              className="gap-1"
+              onClick={() => setView("edit")}
+            >
               <Pencil className="h-3 w-3" /> Edit Details
             </Button>
-            <Button variant="destructive" size="sm" className="gap-1" onClick={() => setDeleteOpen(true)}>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="gap-1"
+              onClick={() => setDeleteOpen(true)}
+            >
               <Trash2 className="h-3 w-3" /> Delete
             </Button>
           </div>
@@ -76,121 +264,239 @@ const ManageProject = () => {
 
         {view === "details" && (
           <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
-            <p className="text-sm">Build a modern e-commerce platform with real-time inventory, payment integration, and a responsive storefront.</p>
+            <p className="text-sm">{data.description}</p>
             <div className="flex flex-wrap gap-2">
-              {skills.map((s) => <Badge key={s.name} variant="secondary">{s.name} (w:{s.weight})</Badge>)}
+              {data.postingSkills.map((s) => (
+                <Badge key={s.skillName} variant="secondary">
+                  {s.skillName} (w:{s.weight})
+                </Badge>
+              ))}
             </div>
             <div className="grid grid-cols-3 gap-4 text-sm">
-              <div><span className="text-muted-foreground">Apply by:</span> <strong>Mar 30, 2026</strong></div>
-              <div><span className="text-muted-foreground">Due:</span> <strong>Jun 30, 2026</strong></div>
-              <div><span className="text-muted-foreground">Location:</span> <strong>Remote</strong></div>
+              <div>
+                <span className="text-muted-foreground">Deadline:</span>{" "}
+                <strong>{new Date(data.deadline).toLocaleDateString()}</strong>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Location:</span>{" "}
+                <strong>
+                  {data.remote ? "Remote" : data.location || "On-site"}
+                </strong>
+              </div>
             </div>
           </div>
         )}
 
         {view === "ranking" && (
           <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
-            <h2 className="font-semibold font-heading text-lg">Candidate Rankings (by Match Score)</h2>
+            <h2 className="font-semibold font-heading text-lg">
+              Candidate Rankings (by Match Score)
+            </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-left py-2 font-semibold">Rank</th>
-                    <th className="text-left py-2 font-semibold">Candidate Name</th>
+                    <th className="text-left py-2 font-semibold">
+                      Candidate Name
+                    </th>
                     <th className="text-center py-2 font-semibold">Score</th>
                     <th className="text-center py-2 font-semibold">Applied?</th>
                     <th className="text-center py-2 font-semibold">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rankingCandidates.map((c, i) => (
-                    <tr key={c.name} className="border-b border-border/50">
-                      <td className="py-2">{i + 1}</td>
-                      <td className="py-2">{c.name}</td>
+                  {rankings.map((c) => (
+                    <tr key={c.rank} className="border-b border-border/50">
+                      <td className="py-2">{c.rank}</td>
+                      <td className="py-2">{c.candidateName}</td>
                       <td className="py-2 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${c.score >= 80 ? "bg-success text-success-foreground" : c.score >= 50 ? "bg-warning text-warning-foreground" : "bg-destructive text-destructive-foreground"}`}>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-bold ${c.score >= 80 ? "bg-success text-success-foreground" : c.score >= 50 ? "bg-warning text-warning-foreground" : "bg-destructive text-destructive-foreground"}`}
+                        >
                           {c.score}%
                         </span>
                       </td>
-                      <td className="py-2 text-center">{c.applied ? "Yes" : "No"}</td>
                       <td className="py-2 text-center">
-                        {!c.applied ? (
-                          <Button variant="outline" size="sm" className="gap-1 h-7" onClick={() => handleNotify(c.name)}>
+                        {c.applicationStatus.applied ? "Yes" : "No"}
+                      </td>
+                      <td className="py-2 text-center">
+                        {!c.applicationStatus.applied ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1 h-7"
+                            onClick={() =>
+                              handleNotify(c.candidateId, c.candidateName)
+                            }
+                          >
                             <Bell className="h-3 w-3" /> Notify
                           </Button>
-                        ) : "—"}
+                        ) : (
+                          "—"
+                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {rankings.length === 0 && (
+                <p className="text-muted-foreground text-sm text-center py-4">
+                  No rankings available yet.
+                </p>
+              )}
             </div>
           </div>
         )}
 
         {view === "applied" && (
           <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
-            <h2 className="font-semibold font-heading text-lg">Applied Candidates</h2>
+            <h2 className="font-semibold font-heading text-lg">
+              Applied Candidates
+            </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-2 font-semibold">Candidate Name</th>
+                    <th className="text-left py-2 font-semibold">
+                      Candidate Name
+                    </th>
                     <th className="text-center py-2 font-semibold">Score</th>
-                    <th className="text-center py-2 font-semibold">Applied On</th>
+                    <th className="text-center py-2 font-semibold">
+                      Applied On
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {appliedCandidates.map((c) => (
-                    <tr key={c.name} className="border-b border-border/50">
-                      <td className="py-2">{c.name}</td>
+                    <tr
+                      key={c.candidateId}
+                      className="border-b border-border/50"
+                    >
+                      <td className="py-2">{c.candidateName}</td>
                       <td className="py-2 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${c.score >= 80 ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground"}`}>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-bold ${c.score >= 80 ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground"}`}
+                        >
                           {c.score}%
                         </span>
                       </td>
-                      <td className="py-2 text-center">{c.appliedDate}</td>
+                      <td className="py-2 text-center">
+                        {new Date(c.appliedAt).toLocaleDateString()}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {appliedCandidates.length === 0 && (
+                <p className="text-muted-foreground text-sm text-center py-4">
+                  No applications yet.
+                </p>
+              )}
             </div>
           </div>
         )}
 
         {view === "edit" && (
           <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-5">
-            <div className="space-y-1"><label className="text-sm font-medium">Project Name</label><Input defaultValue="E-Commerce Platform" /></div>
-            <div className="space-y-1"><label className="text-sm font-medium">Description</label><Textarea defaultValue="Build a modern e-commerce platform..." rows={3} /></div>
-
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Project Name</label>
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Description</label>
+              <Textarea
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                rows={3}
+              />
+            </div>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <label className="text-sm font-medium">Required Skills</label>
-                <Button type="button" variant="outline" size="sm" onClick={addSkill} className="gap-1"><Plus className="h-3 w-3" /> Add</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addSkill}
+                  className="gap-1"
+                >
+                  <Plus className="h-3 w-3" /> Add
+                </Button>
               </div>
               {skills.map((s, i) => (
                 <div key={i} className="flex gap-3 items-end">
-                  <div className="flex-1"><Input value={s.name} onChange={(e) => { const n = [...skills]; n[i].name = e.target.value; setSkills(n); }} /></div>
+                  <div className="flex-1">
+                    <Input
+                      value={s.name}
+                      onChange={(e) => {
+                        const n = [...skills];
+                        n[i].name = e.target.value;
+                        setSkills(n);
+                      }}
+                    />
+                  </div>
                   <div className="w-32">
-                    <Select value={s.weight} onValueChange={(v) => { const n = [...skills]; n[i].weight = v; setSkills(n); }}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>{[1, 2, 3, 4, 5].map((v) => <SelectItem key={v} value={String(v)}>Weight {v}</SelectItem>)}</SelectContent>
+                    <Select
+                      value={s.weight}
+                      onValueChange={(v) => {
+                        const n = [...skills];
+                        n[i].weight = v;
+                        setSkills(n);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 4, 5].map((v) => (
+                          <SelectItem key={v} value={String(v)}>
+                            Weight {v}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
                     </Select>
                   </div>
-                  {skills.length > 1 && <Button type="button" variant="ghost" size="icon" onClick={() => removeSkill(i)} className="text-destructive shrink-0"><Trash2 className="h-4 w-4" /></Button>}
+                  {skills.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeSkill(i)}
+                      className="text-destructive shrink-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1"><label className="text-sm font-medium">Application Deadline</label><Input type="date" defaultValue="2026-03-30" /></div>
-              <div className="space-y-1"><label className="text-sm font-medium">Project Deadline</label><Input type="date" defaultValue="2026-06-30" /></div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Deadline</label>
+              <Input
+                type="date"
+                value={editDeadline}
+                onChange={(e) => setEditDeadline(e.target.value)}
+              />
             </div>
             <div className="flex items-center gap-3">
               <Switch checked={remote} onCheckedChange={setRemote} />
-              <label className="text-sm font-medium">{remote ? "Remote" : "On-site"}</label>
+              <label className="text-sm font-medium">
+                {remote ? "Remote" : "On-site"}
+              </label>
             </div>
-            <Button onClick={() => { toast.success("Changes saved!"); setView("details"); }}>Save Changes</Button>
+            <Button onClick={handleSaveEdit} disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
           </div>
         )}
 
