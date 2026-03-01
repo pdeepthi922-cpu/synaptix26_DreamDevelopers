@@ -29,6 +29,7 @@ import PostInternship from "@/pages/recruiter/PostInternship";
 import PostProject from "@/pages/recruiter/PostProject";
 import ManageInternship from "@/pages/recruiter/ManageInternship";
 import ManageProject from "@/pages/recruiter/ManageProject";
+import RecruiterProfile from "@/pages/recruiter/RecruiterProfile";
 
 const queryClient = new QueryClient();
 
@@ -46,22 +47,128 @@ const App = () => (
             <Route path="/signup" element={<Signup />} />
 
             {/* Candidate Protected Routes */}
-            <Route path="/onboarding/candidate" element={<ProtectedRoute allowedRole="candidate"><CandidateOnboarding /></ProtectedRoute>} />
-            <Route path="/dashboard/candidate" element={<ProtectedRoute allowedRole="candidate"><CandidateDashboard /></ProtectedRoute>} />
-            <Route path="/internships" element={<ProtectedRoute allowedRole="candidate"><CandidateInternships /></ProtectedRoute>} />
-            <Route path="/projects" element={<ProtectedRoute allowedRole="candidate"><CandidateProjects /></ProtectedRoute>} />
-            <Route path="/internships/:id" element={<ProtectedRoute allowedRole="candidate"><InternshipDetail /></ProtectedRoute>} />
-            <Route path="/projects/:id" element={<ProtectedRoute allowedRole="candidate"><ProjectDetail /></ProtectedRoute>} />
-            <Route path="/applied" element={<ProtectedRoute allowedRole="candidate"><Applied /></ProtectedRoute>} />
-            <Route path="/profile/candidate" element={<ProtectedRoute allowedRole="candidate"><CandidateProfile /></ProtectedRoute>} />
+            <Route
+              path="/onboarding/candidate"
+              element={
+                <ProtectedRoute allowedRole="candidate">
+                  <CandidateOnboarding />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/candidate"
+              element={
+                <ProtectedRoute allowedRole="candidate">
+                  <CandidateDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/internships"
+              element={
+                <ProtectedRoute allowedRole="candidate">
+                  <CandidateInternships />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/projects"
+              element={
+                <ProtectedRoute allowedRole="candidate">
+                  <CandidateProjects />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/internships/:id"
+              element={
+                <ProtectedRoute allowedRole="candidate">
+                  <InternshipDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/projects/:id"
+              element={
+                <ProtectedRoute allowedRole="candidate">
+                  <ProjectDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/applied"
+              element={
+                <ProtectedRoute allowedRole="candidate">
+                  <Applied />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile/candidate"
+              element={
+                <ProtectedRoute allowedRole="candidate">
+                  <CandidateProfile />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Recruiter Protected Routes */}
-            <Route path="/onboarding/recruiter" element={<ProtectedRoute allowedRole="recruiter"><RecruiterOnboarding /></ProtectedRoute>} />
-            <Route path="/dashboard/recruiter" element={<ProtectedRoute allowedRole="recruiter"><RecruiterDashboard /></ProtectedRoute>} />
-            <Route path="/post/internship" element={<ProtectedRoute allowedRole="recruiter"><PostInternship /></ProtectedRoute>} />
-            <Route path="/post/project" element={<ProtectedRoute allowedRole="recruiter"><PostProject /></ProtectedRoute>} />
-            <Route path="/recruiter/internships/:id" element={<ProtectedRoute allowedRole="recruiter"><ManageInternship /></ProtectedRoute>} />
-            <Route path="/recruiter/projects/:id" element={<ProtectedRoute allowedRole="recruiter"><ManageProject /></ProtectedRoute>} />
+            <Route
+              path="/onboarding/recruiter"
+              element={
+                <ProtectedRoute allowedRole="recruiter">
+                  <RecruiterOnboarding />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/recruiter"
+              element={
+                <ProtectedRoute allowedRole="recruiter">
+                  <RecruiterDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/post/internship"
+              element={
+                <ProtectedRoute allowedRole="recruiter">
+                  <PostInternship />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/post/project"
+              element={
+                <ProtectedRoute allowedRole="recruiter">
+                  <PostProject />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/recruiter/internships/:id"
+              element={
+                <ProtectedRoute allowedRole="recruiter">
+                  <ManageInternship />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/recruiter/projects/:id"
+              element={
+                <ProtectedRoute allowedRole="recruiter">
+                  <ManageProject />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile/recruiter"
+              element={
+                <ProtectedRoute allowedRole="recruiter">
+                  <RecruiterProfile />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Catch-all */}
             <Route path="*" element={<NotFound />} />

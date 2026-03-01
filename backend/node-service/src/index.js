@@ -49,21 +49,20 @@ app.use((req, res) => {
 // ─── Global Error Handler ───
 app.use((err, req, res, next) => {
   if (err.name === "ZodError") {
+    const issues = err.issues || err.errors || [];
     return res.status(400).json({
       error: "Validation failed",
-      details: err.errors.map((e) => ({
-        field: e.path.join("."),
+      details: issues.map((e) => ({
+        field: (e.path || []).join("."),
         message: e.message,
       })),
     });
   }
   if (err.code === "P2002") {
-    return res
-      .status(409)
-      .json({
-        error: "A record with this data already exists.",
-        field: err.meta?.target,
-      });
+    return res.status(409).json({
+      error: "A record with this data already exists.",
+      field: err.meta?.target,
+    });
   }
   if (err.code === "P2025") {
     return res.status(404).json({ error: "Record not found." });

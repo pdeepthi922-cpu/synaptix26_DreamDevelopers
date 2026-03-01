@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 import spacy
 from pdfminer.high_level import extract_text
 
-from skill_taxonomy import SKILL_TAXONOMY, expand_skills
+from skill_taxonomy import SKILL_TAXONOMY, EXTRA_SKILLS, expand_skills
 
 load_dotenv()
 
@@ -27,7 +27,8 @@ nlp = spacy.load("en_core_web_md")
 
 KNOWN_SKILLS = sorted(set(
     list(SKILL_TAXONOMY.keys()) +
-    [s for parents in SKILL_TAXONOMY.values() for s in parents]
+    [s for parents in SKILL_TAXONOMY.values() for s in parents] +
+    EXTRA_SKILLS
 ))
 
 PROFICIENCY_PATTERNS = {
@@ -91,51 +92,275 @@ def _extract_sections(text: str) -> dict[str, str]:
     return sections
 
 
+# ──────────────────────────────────────────────────────────────────────
+# BULLET / PROJECT PARSING — character-level approach (no fragile regex)
+# ──────────────────────────────────────────────────────────────────────
+
+# Actual Unicode bullet characters PDFs commonly use.
+# IMPORTANT: pdfminer extracts Wingdings/Symbol bullets as Private Use Area
+# (PUA) characters like \uf0b7. These MUST be included.
+BULLET_CHARS_SET = set(
+    '-•‣●○◦▪▫■□▸▹►▻▶▷◆◇∙⁃⦿⦁☆★◈➤➜→➔◗☐☑☒·›‹*'
+    '\u2022\u2023\u25cf\u25cb\u25aa\u25ab\u25a0\u25a1'
+    '\u25b8\u25b9\u25ba\u25bb\u25b6\u25b7\u25c6\u25c7'
+    '\u2219\u2043\u2981\u29bf\u25e6\u2218\u27a4\u279c'
+    '\u2192\u2794\u25d8\u2605\u2606\u2610\u2611\u2612'
+    '\u00b7\u203a\u2039'
+    '\uf0b7\uf0a7\uf0d8\uf076\uf0a8\uf0fc\uf0e8'  # PUA bullets from Wingdings/Symbol
+)
+
+# For INLINE splitting, exclude '-' and '*' (too common in normal text)
+# These are only used when the bullet appears at the START of a line.
+INLINE_BULLET_CHARS = BULLET_CHARS_SET - {'-', '*', '·'}
+
+
+def _is_bullet_char(ch: str) -> bool:
+    """Check if a single character is a known bullet."""
+    return ch in BULLET_CHARS_SET
+
+
+def _is_inline_bullet_char(ch: str) -> bool:
+    """Check if a char is a bullet suitable for mid-line splitting.
+    Excludes '-' and '*' which appear too often in normal prose."""
+    return ch in INLINE_BULLET_CHARS
+
+
+def _split_inline_bullets(text: str) -> str:
+    """Character-level pass: insert newline before any bullet char
+    that appears mid-line (not at position 0 or right after a newline).
+
+    Handles cases like:
+      'AI Powered Career Path Explorer: □ Built a web app...'
+    → 'AI Powered Career Path Explorer:\n□ Built a web app...'
+
+    Only uses INLINE_BULLET_CHARS (excludes dash/asterisk to avoid
+    false positives on normal prose).
+    """
+    if not text:
+        return text
+
+    result = []
+    i = 0
+    length = len(text)
+
+    while i < length:
+        ch = text[i]
+
+        if _is_inline_bullet_char(ch) and i > 0 and text[i - 1] != '\n':
+            # Check that this looks like a real bullet: followed by a space
+            next_idx = i + 1
+            if next_idx < length and text[next_idx] in ' \t':
+                # Strip trailing spaces from previous content, then newline
+                while result and result[-1] in ' \t':
+                    result.pop()
+                result.append('\n')
+
+        result.append(ch)
+        i += 1
+
+    return ''.join(result)
+
+
+def _is_bullet_line(line: str) -> bool:
+    """Check if a line starts with a bullet character."""
+    stripped = line.strip()
+    if not stripped:
+        return False
+    if len(stripped) >= 2 and _is_bullet_char(stripped[0]) and stripped[1] in ' \t':
+        return True
+    # Numbered lists: "1." or "1)" or "1]"
+    if re.match(r'^\d+[.)\]]\s', stripped):
+        return True
+    return False
+
+
+def _clean_bullet(line: str) -> str:
+    """Remove bullet prefix from a line and normalize whitespace."""
+    stripped = line.strip()
+    if stripped and _is_bullet_char(stripped[0]):
+        stripped = stripped[1:].lstrip()
+    else:
+        stripped = re.sub(r'^\d+[.)\]]\s+', '', stripped)
+    # Collapse multiple spaces (common in pdfminer output)
+    stripped = re.sub(r'\s{2,}', ' ', stripped)
+    return stripped.strip()
+
+
+def _merge_wrapped_lines(lines: list[str]) -> list[str]:
+    """Merge PDF-wrapped continuation lines.
+    A continuation line starts with a lowercase letter and is not a bullet.
+    """
+    if not lines:
+        return lines
+
+    merged = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            merged.append("")
+            continue
+
+        if not merged:
+            merged.append(stripped)
+            continue
+
+        prev = merged[-1].strip()
+        is_continuation = (
+            stripped[0].islower()
+            and prev
+            and not _is_bullet_line(line)
+        )
+
+        if is_continuation:
+            merged[-1] = prev + ' ' + stripped
+        else:
+            merged.append(stripped)
+
+    return merged
+
+
+# Common sentence-starter verbs that distinguish descriptions from titles
+_SENTENCE_STARTERS = {
+    'built', 'created', 'developed', 'designed', 'implemented',
+    'set', 'used', 'managed', 'led', 'worked', 'analyzed',
+    'users', 'achieved', 'established', 'improved', 'reduced',
+    'increased', 'deployed', 'integrated', 'wrote', 'configured',
+    'maintained', 'launched', 'contributed', 'collaborated',
+    'responsible', 'handled', 'performed', 'conducted', 'organized',
+    'tested', 'verified', 'automated', 'optimized', 'resolved',
+    'assisted', 'coordinated', 'delivered', 'ensured', 'generated',
+    'provided', 'supported', 'trained',
+}
+
+
+def _is_title_line(line: str) -> bool:
+    """Detect if a line looks like a project title.
+
+    Primary signal: titles typically end with ':'
+    Secondary signals: starts uppercase, not a sentence, reasonably short.
+    """
+    stripped = line.strip()
+    if not stripped or len(stripped) < 3:
+        return False
+    if _is_bullet_line(line):
+        return False
+    if len(stripped) > 200:
+        return False
+    # Must start with uppercase or digit
+    if not stripped[0].isupper() and not stripped[0].isdigit():
+        return False
+    # Reject lines ending with period — they are sentences
+    if stripped.rstrip(':').endswith('.'):
+        return False
+    # Reject lines that start with common sentence verbs
+    first_word = stripped.split()[0].lower().rstrip(':,;')
+    if first_word in _SENTENCE_STARTERS:
+        return False
+    return True
+
+
+def _extract_skills_from_text(text: str) -> list[str]:
+    """Extract all known skills mentioned in a block of text."""
+    text_lower = text.lower()
+    found = []
+    seen = set()
+    for skill in KNOWN_SKILLS:
+        skill_lower = skill.lower()
+        if skill_lower in seen:
+            continue
+        pattern = r'\b' + re.escape(skill_lower) + r'\b'
+        if re.search(pattern, text_lower):
+            found.append(skill)
+            seen.add(skill_lower)
+    return found
+
+
 def _extract_projects(sections: dict[str, str]) -> list[dict]:
-    """Extract project entries from relevant sections."""
+    """Extract project entries from relevant sections.
+
+    Pipeline:
+    1. Character-level bullet splitting (handles inline bullets)
+    2. Split into lines
+    3. Merge PDF-wrapped continuations (lowercase starters)
+    4. Classify each line as title or bullet
+    5. Group bullets under their preceding title
+    """
     projects = []
-    for header_patterns, section_name in [(PROJECT_HEADERS, None)]:
-        pass  # we iterate by key matching below
 
     for key, content in sections.items():
         is_project = any(re.search(p, key, re.IGNORECASE) for p in PROJECT_HEADERS)
         if not is_project:
             continue
 
-        # Split by bullet points, numbered items, or blank lines
-        entries = re.split(r"\n\s*(?:[-•●▪▸►]\s*|\d+[\.\)]\s+|\n)", content)
-        current_project = None
+        # Log raw content for debugging (visible in Python service console)
+        print(f"\n{'='*60}")
+        print(f"[DEBUG] Raw project section ({key}):")
+        print(repr(content[:500]))
+        print(f"{'='*60}\n")
 
-        for entry in entries:
-            entry = entry.strip()
-            if not entry or len(entry) < 5:
+        # Step 1: Split inline bullets onto separate lines
+        split_text = _split_inline_bullets(content)
+
+        print(f"[DEBUG] After inline bullet split:")
+        print(repr(split_text[:500]))
+        print()
+
+        # Step 2: Split into lines
+        raw_lines = split_text.split('\n')
+
+        # Step 3: Merge wrapped continuation lines
+        lines = _merge_wrapped_lines(raw_lines)
+
+        print(f"[DEBUG] After merge ({len(lines)} lines):")
+        for i, l in enumerate(lines[:20]):
+            is_b = _is_bullet_line(l)
+            is_t = _is_title_line(l)
+            print(f"  [{i}] {'BULLET' if is_b else 'TITLE' if is_t else 'OTHER'}: {l[:80]}")
+        print()
+
+        current_title = None
+        current_bullets = []
+
+        def _flush_project():
+            nonlocal current_title, current_bullets
+            if current_title:
+                description = ' '.join(current_bullets)
+                full_text = current_title + ' ' + description
+                techs = _extract_skills_from_text(full_text)
+                projects.append({
+                    'name': current_title.rstrip(':').strip()[:200],
+                    'description': description[:500],
+                    'technologies': techs[:15],
+                })
+            current_title = None
+            current_bullets = []
+
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
                 continue
 
-            # First line of a group is usually the project name
-            lines = entry.split("\n")
-            name_line = lines[0].strip()
+            if _is_bullet_line(line):
+                cleaned = _clean_bullet(line)
+                if cleaned:
+                    current_bullets.append(cleaned)
+            elif _is_title_line(line):
+                _flush_project()
+                current_title = stripped
+            else:
+                # Continuation — append to last bullet or title
+                if current_bullets:
+                    current_bullets[-1] += ' ' + stripped
+                elif current_title:
+                    current_title += ' ' + stripped
 
-            # Detect if it looks like a project name (short, possibly bold/capitalized)
-            if len(name_line) < 100 and not name_line.endswith("."):
-                desc_lines = [l.strip() for l in lines[1:] if l.strip()]
-                description = " ".join(desc_lines) if desc_lines else ""
+        _flush_project()
 
-                # Extract tech/skills mentioned
-                techs = []
-                for skill in KNOWN_SKILLS:
-                    if re.search(r'\b' + re.escape(skill.lower()) + r'\b', entry.lower()):
-                        techs.append(skill)
+    print(f"[DEBUG] Extracted {len(projects)} projects:")
+    for p in projects:
+        print(f"  - {p['name'][:60]}... ({len(p.get('technologies', []))} skills)")
 
-                projects.append({
-                    "name": name_line,
-                    "description": description[:300],
-                    "technologies": techs[:10],
-                })
-
-            if len(projects) >= 10:
-                break
-
-    return projects
+    return projects[:10]
 
 
 def _extract_experience(sections: dict[str, str]) -> list[dict]:

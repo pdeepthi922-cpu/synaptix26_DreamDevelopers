@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Plus, Trash2, ArrowLeft, Trash, Loader2 } from "lucide-react";
+import {
+  Pencil,
+  Plus,
+  Trash2,
+  ArrowLeft,
+  Trash,
+  Loader2,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 import ConfirmationModal from "@/components/ConfirmationModal";
 import { useAuth } from "@/contexts/AuthContext";
@@ -46,6 +54,8 @@ const CandidateProfile = () => {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [resumeUploading, setResumeUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [personal, setPersonal] = useState({
     fullName: "",
@@ -94,30 +104,113 @@ const CandidateProfile = () => {
     setSaving(true);
     try {
       await api.put("/candidates/profile", {
-        name: personal.fullName,
+        name: personal.fullName.trim().substring(0, 100),
         phone: personal.phone || null,
         location: personal.location || null,
         linkedinUrl: personal.linkedin || null,
         skills: skills
           .filter((s) => s.name.trim() && s.proficiency)
           .map((s) => ({
-            skillName: s.name,
+            skillName: s.name.trim().substring(0, 50),
             proficiency: parseInt(s.proficiency),
           })),
-        projects: projects.filter((p) => p.name.trim()),
-        experience: experiences.filter((e) => e.company.trim()),
+        projects: projects
+          .filter((p) => p.name.trim())
+          .map((p) => ({
+            name: p.name.trim().substring(0, 200),
+            description: (p.description || "").substring(0, 500),
+            skillsUsed: (p.skillsUsed || "").substring(0, 300),
+            role: (p.role || "").substring(0, 100),
+          })),
+        experience: experiences
+          .filter((e) => e.company.trim())
+          .map((e) => ({
+            company: e.company.trim().substring(0, 200),
+            type: (e.type || "").substring(0, 50),
+            role: (e.role || "").substring(0, 200),
+            duration: (e.duration || "").substring(0, 100),
+          })),
       });
       updateUserName(personal.fullName);
       setEditing(false);
       toast.success("Profile updated successfully!");
     } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to update profile.");
+      const resp = err.response?.data;
+      let msg = "Failed to update profile.";
+      if (resp?.details && Array.isArray(resp.details)) {
+        msg = resp.details
+          .map((d: any) => `${d.field}: ${d.message}`)
+          .join(", ");
+      } else if (resp?.error) {
+        msg = resp.error;
+      }
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
   };
 
   const handleCancel = () => setEditing(false);
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setResumeUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("resume", file);
+      const { data } = await api.post("/candidates/resume", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const parsed = data.parsed;
+
+      // Auto-fill personal info
+      if (parsed.name) setPersonal((p) => ({ ...p, fullName: parsed.name }));
+      if (parsed.phone) setPersonal((p) => ({ ...p, phone: parsed.phone }));
+      if (parsed.location)
+        setPersonal((p) => ({ ...p, location: parsed.location }));
+      if (parsed.linkedinUrl)
+        setPersonal((p) => ({ ...p, linkedin: parsed.linkedinUrl }));
+
+      // Merge skills
+      const allParsedSkills = [
+        ...(parsed.highConfidenceSkills || parsed.skills || []),
+        ...(parsed.uncertainSkills || []),
+      ].map((s: any) => ({
+        name: s.skillName,
+        proficiency: String(s.proficiency),
+      }));
+      if (allParsedSkills.length > 0) setSkills(allParsedSkills);
+
+      // Fill projects
+      const parsedProjects = (parsed.projects || []).map((p: any) => ({
+        name: p.name || "",
+        description: p.description || "",
+        skillsUsed: Array.isArray(p.technologies)
+          ? p.technologies.join(", ")
+          : p.skillsUsed || "",
+        role: p.role || "",
+      }));
+      if (parsedProjects.length > 0) setProjects(parsedProjects);
+
+      // Fill experience
+      const parsedExperience = (parsed.experience || []).map((e: any) => ({
+        company: e.company || "",
+        type: e.type || "",
+        role: e.role || "",
+        duration: e.duration || "",
+      }));
+      if (parsedExperience.length > 0) setExperiences(parsedExperience);
+
+      toast.success("Resume parsed! Details updated. Review and click Save.");
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to parse resume.");
+    } finally {
+      setResumeUploading(false);
+      // Reset file input so same file can be selected again
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const handleDeleteAccount = async () => {
     try {
@@ -158,6 +251,29 @@ const CandidateProfile = () => {
             </Button>
           ) : (
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={resumeUploading}
+              >
+                {resumeUploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Parsing…
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" /> Upload Resume
+                  </>
+                )}
+              </Button>
+              <input
+                type="file"
+                accept=".pdf"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={handleResumeUpload}
+              />
               <Button variant="outline" onClick={handleCancel}>
                 Cancel
               </Button>

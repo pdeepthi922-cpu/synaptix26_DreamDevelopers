@@ -16,7 +16,16 @@ import { NavLink } from "@/components/NavLink";
 import Logo from "@/components/Logo";
 import NotificationDropdown from "@/components/NotificationDropdown";
 import { useAuth } from "@/contexts/AuthContext";
-import { Briefcase, FolderKanban, PlusCircle, LayoutDashboard, FileCheck, ChevronUp, User, LogOut } from "lucide-react";
+import {
+  Briefcase,
+  FolderKanban,
+  PlusCircle,
+  LayoutDashboard,
+  FileCheck,
+  ChevronUp,
+  User,
+  LogOut,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,10 +58,16 @@ function AppSidebar({ role }: { role: "candidate" | "recruiter" }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => { logout(); navigate("/login"); };
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-retro-charcoal/8 sidebar-retro">
+    <Sidebar
+      collapsible="icon"
+      className="border-r border-retro-charcoal/8 sidebar-retro"
+    >
       <div className="flex h-14 items-center px-4 border-b border-white/8">
         <Logo collapsed={collapsed} />
       </div>
@@ -70,7 +85,11 @@ function AppSidebar({ role }: { role: "candidate" | "recruiter" }) {
                       activeClassName="bg-white/10 text-retro-gold font-semibold border-l-2 border-retro-gold"
                     >
                       <item.icon className="mr-2 h-4 w-4 shrink-0" />
-                      {!collapsed && <span className="tracking-wide text-sm">{item.title}</span>}
+                      {!collapsed && (
+                        <span className="tracking-wide text-sm">
+                          {item.title}
+                        </span>
+                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -90,18 +109,38 @@ function AppSidebar({ role }: { role: "candidate" | "recruiter" }) {
               </div>
               {!collapsed && (
                 <>
-                  <span className="text-sm font-medium truncate flex-1 text-left text-sidebar-foreground">{user?.fullName || "User"}</span>
+                  <span className="text-sm font-medium truncate flex-1 text-left text-sidebar-foreground">
+                    {user?.fullName || "User"}
+                  </span>
                   <ChevronUp className="h-4 w-4 text-sidebar-foreground/60 shrink-0" />
                 </>
               )}
             </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" className="w-48 rounded-xl border border-retro-charcoal/10 shadow-soft-lg">
+            <DropdownMenuContent
+              side="top"
+              align="start"
+              className="w-48 rounded-xl border border-retro-charcoal/10 shadow-soft-lg"
+            >
               {role === "candidate" && (
-                <DropdownMenuItem onClick={() => navigate("/profile/candidate")} className="gap-2 cursor-pointer rounded-lg">
+                <DropdownMenuItem
+                  onClick={() => navigate("/profile/candidate")}
+                  className="gap-2 cursor-pointer rounded-lg"
+                >
                   <User className="h-4 w-4" /> Profile
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={handleLogout} className="gap-2 cursor-pointer rounded-lg text-retro-orange">
+              {role === "recruiter" && (
+                <DropdownMenuItem
+                  onClick={() => navigate("/profile/recruiter")}
+                  className="gap-2 cursor-pointer rounded-lg"
+                >
+                  <User className="h-4 w-4" /> Profile
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onClick={handleLogout}
+                className="gap-2 cursor-pointer rounded-lg text-retro-orange"
+              >
                 <LogOut className="h-4 w-4" /> Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -121,11 +160,15 @@ const DashboardLayout = ({ children, role }: DashboardLayoutProps) => {
           <header className="h-14 flex items-center justify-between border-b border-retro-charcoal/8 px-5 bg-white/80 backdrop-blur-md">
             <div className="flex items-center">
               <SidebarTrigger className="mr-4" />
-              <span className="text-xs text-retro-brown capitalize font-mono tracking-wider uppercase">{role} Portal</span>
+              <span className="text-xs text-retro-brown capitalize font-mono tracking-wider uppercase">
+                {role} Portal
+              </span>
             </div>
             <NotificationDropdown />
           </header>
-          <main className="flex-1 p-6 overflow-auto bg-retro-beige">{children}</main>
+          <main className="flex-1 p-6 overflow-auto bg-retro-beige">
+            {children}
+          </main>
         </div>
       </div>
     </SidebarProvider>

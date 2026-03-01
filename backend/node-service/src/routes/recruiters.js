@@ -46,11 +46,46 @@ router.get(
   catchAsync(async (req, res) => {
     const profile = await prisma.recruiterProfile.findUnique({
       where: { userId: req.user.id },
-      include: { postings: true },
+      include: {
+        postings: true,
+        user: { select: { email: true } },
+      },
     });
     if (!profile) throw new ApiError(404, "Recruiter profile not found.");
 
     res.json({ profile });
+  }),
+);
+
+// ─── PUT /recruiters/profile ───
+const profileUpdateSchema = z.object({
+  companyName: z.string().min(1).max(200).optional(),
+  companySize: z.string().max(50).optional().nullable(),
+});
+
+router.put(
+  "/profile",
+  authenticate,
+  requireRole("RECRUITER"),
+  catchAsync(async (req, res) => {
+    const data = profileUpdateSchema.parse(req.body);
+    const profile = await prisma.recruiterProfile.findUnique({
+      where: { userId: req.user.id },
+    });
+    if (!profile) throw new ApiError(404, "Recruiter profile not found.");
+
+    const updateData = {};
+    if (data.companyName !== undefined)
+      updateData.companyName = data.companyName;
+    if (data.companySize !== undefined)
+      updateData.companySize = data.companySize;
+
+    const updated = await prisma.recruiterProfile.update({
+      where: { id: profile.id },
+      data: updateData,
+    });
+
+    res.json({ message: "Profile updated.", profile: updated });
   }),
 );
 

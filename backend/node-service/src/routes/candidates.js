@@ -26,7 +26,7 @@ const onboardingSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   phone: z.string().max(20).optional().nullable(),
   location: z.string().max(100).optional().nullable(),
-  linkedinUrl: z.string().url().optional().nullable().or(z.literal("")),
+  linkedinUrl: z.string().max(200).optional().nullable().or(z.literal("")),
   skills: z
     .array(
       z.object({
@@ -63,7 +63,7 @@ const profileUpdateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   phone: z.string().max(20).optional().nullable(),
   location: z.string().max(100).optional().nullable(),
-  linkedinUrl: z.string().url().optional().nullable().or(z.literal("")),
+  linkedinUrl: z.string().max(200).optional().nullable().or(z.literal("")),
   skills: z
     .array(
       z.object({
